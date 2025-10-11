@@ -4,10 +4,11 @@
 import sys
 import argparse
 from pathlib import Path
-from tokens import *
+from lexer import *
 from typing import *
-from parsing import *
+from parser import *
 from assembly import *
+from tacky import *
 import subprocess
 
 
@@ -17,6 +18,7 @@ def parse_args():
     group.add_argument("--lex", action="store_true", help="Run lexer stage only")
     group.add_argument("--parse", action="store_true", help="Run parser stage only")
     group.add_argument("--codegen", action="store_true", help="Run code generation stage only")
+    group.add_argument("--tacky", action="store_true", help="Run TACKY generation stage only")
 
     parser.add_argument("path", type=str, help="Path to the source file")
 
@@ -50,14 +52,22 @@ def main(argv):
     if args.codegen:
         tokens = get_tokens(text)
         ast = parse(tokens)
-        asm_ast = parse_asm(ast)
+        asm_ast = ast_parse_asm(ast)
         print(asm_ast)
 
+        return 0
+    
+    if args.tacky:
+        tokens = get_tokens(text)
+        ast = parse(tokens)
+        tacky_ast = t_parse_program(ast)
+        print(tacky_ast)
+        
         return 0
 
     tokens = get_tokens(text)
     ast = parse(tokens)
-    asm_ast = parse_asm(ast)
+    asm_ast = ast_parse_asm(ast)
     asm = gen_asm(asm_ast)
     print(asm)
 

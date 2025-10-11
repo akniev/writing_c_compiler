@@ -1,81 +1,117 @@
-from parsing import *
-from tokens import *
+from parser import *
+from lexer import *
 from dataclasses import *
+from tacky import *
 
 class AsmNode:
     pass
 
 @dataclass
-class ProgramAsmNode(AsmNode):
-    function: "FunctionAsmNode"
+class AsmProgram(AsmNode):
+    function: "AsmFunction"
 
 @dataclass
-class FunctionAsmNode(AsmNode):
+class AsmFunction(AsmNode):
     name: str
-    instructions: List["InstructionAsmNode"]
+    instructions: List["AsmInstruction"]
 
-class InstructionAsmNode:
+class AsmInstruction:
     pass
 
 @dataclass
-class MovAsmNode(InstructionAsmNode):
-    src: "OperandAsmNode"
-    dst: "OperandAsmNode"
+class AsmMove(AsmInstruction):
+    src: "AsmOperand"
+    dst: "AsmOperand"
 
-class OperandAsmNode:
+@dataclass
+class AsmUnary(AsmInstruction):
+    unary_operator: "AsmUnaryOperator"
+    operand: "AsmOperand"
+
+@dataclass
+class AsmAllocateStack(AsmInstruction):
+    value: int
+
+class AsmUnaryOperator(AsmNode):
+    pass
+
+class AsmNeg(AsmUnaryOperator):
+    pass
+
+class AsmNot(AsmUnaryOperator):
+    pass
+
+class AsmOperand:
     pass
 
 @dataclass
-class RegisterAsmNode(OperandAsmNode):
+class AsmRegister(AsmOperand):
+    reg: "AsmReg"
+
+class AsmReg(AsmNode):
+    pass
+
+class AsmAX(AsmReg):
+    pass
+
+class AsmR10(AsmReg):
     pass
 
 @dataclass
-class ImmutableAsmNode(OperandAsmNode):
+class AsmImmutable(AsmOperand):
     value: int
 
 @dataclass
-class RetAsmNode(InstructionAsmNode):
+class AsmPseudo(AsmOperand):
+    identifier: str
+
+@dataclass
+class AsmStack(AsmOperand):
+    value: int
+
+@dataclass
+class AsmRet(AsmInstruction):
     pass
 
-def parse_expression(e: ExpressionNode) -> "ImmutableAsmNode":
-    return ImmutableAsmNode(e.const)
+def ast_parse_expression(e: ExpressionNode) -> "AsmImmutable":
+    return AsmImmutable(e.const)
 
-def parse_return(s: ReturnNode) -> List["InstructionAsmNode"]:
-    src = parse_expression(s.exp)
-    dst = RegisterAsmNode()
+def ast_parse_return(s: ReturnNode) -> List["AsmInstruction"]:
+    src = ast_parse_expression(s.exp)
+    dst = AsmRegister()
     return [
-        MovAsmNode(src, dst),
-        RetAsmNode()
+        AsmMove(src, dst),
+        AsmRet()
     ]
 
-def parse_function(f: FunctionNode) -> FunctionAsmNode:
+def ast_parse_function(f: FunctionNode) -> AsmFunction:
     f_name = f.name
-    f_insts = parse_return(f.body)
-    return FunctionAsmNode(f_name, f_insts)
+    f_insts = ast_parse_return(f.body)
+    return AsmFunction(f_name, f_insts)
 
-def parse_asm(ast: ProgramNode) -> ProgramAsmNode:
-    f_fun = parse_function(ast.function)
-    return ProgramAsmNode(f_fun)
+def ast_parse_asm(ast: ProgramNode) -> AsmProgram:
+    f_fun = ast_parse_function(ast.function)
+    return AsmProgram(f_fun)
 
-def print_operand(op: OperandAsmNode):
+def print_operand(op: AsmOperand):
     match op:
-        case RegisterAsmNode():
+        case AsmRegister():
             return "%eax"
-        case ImmutableAsmNode(value):
+        case AsmImmutable(value):
             return f"${value}"
         case _:
             raise SyntaxError
 
-def print_instruction(ins: InstructionAsmNode) -> str:
+def print_instruction(ins: AsmInstruction) -> str:
     match ins:
-        case MovAsmNode(src, dst):
+        case AsmMove(src, dst):
             return f"movl {print_operand(src)}, {print_operand(dst)}"
-        case RetAsmNode():
+        case AsmRet():
             return "ret"
         case _:
             raise SyntaxError
 
-def print_function(f: FunctionAsmNode) -> str:
+def print_function(f: AsmFunction) -> str:
     asm = ""
     asm += f".globl {f.name}\n"
     asm += f"{f.name}:\n"
@@ -85,7 +121,7 @@ def print_function(f: FunctionAsmNode) -> str:
     
     return asm
 
-def gen_asm(asm_ast: ProgramAsmNode) -> str:
+def gen_asm(asm_ast: AsmProgram) -> str:
     asm = ""
 
     asm += print_function(asm_ast.function)
@@ -93,5 +129,62 @@ def gen_asm(asm_ast: ProgramAsmNode) -> str:
     asm += '  .section .not.GNU-stack,"",@progbits'
 
     return asm
-    
-    
+
+
+def tacky_parse_value(t_val: TValue) -> AsmOperand:
+    match t_val:
+        case TConstant(value):
+            return AsmImmutable(value)
+        case TVariable(identifier):
+            return AsmPseudo(identifier)
+        case _:
+            raise SyntaxError
+        
+
+def tacky_parse_unary_operator(t_unop: TUnaryOperator) -> AsmUnaryOperator:
+    match t_unop:
+        case TNegateOp():
+            return AsmNeg()
+        case TComplementOp():
+            return AsmNot()
+        case _:
+            raise SyntaxError
+
+
+def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
+    match t_inst:
+        case TReturnInstruction(val):
+            a_val = tacky_parse_value(val),
+            return [
+                AsmMove(a_val, AsmRegister(AsmAX())),
+                AsmRet(),
+            ]
+        case TUnaryInstruction(unop, src, dst):
+            a_unop = tacky_parse_unary_operator(unop)
+            a_src = tacky_parse_value(src)
+            a_dst = tacky_parse_value(dst)
+            return [
+                AsmMove(a_src, a_dst),
+                AsmUnary(a_unop, a_dst)
+            ]
+        case _:
+            raise SyntaxError
+
+
+def tacky_parse_instructions(t_insts: List[TInstruction]) -> List[AsmInstruction]:
+    result = []
+    for inst in t_insts:
+        a_insts = tacky_parse_instruction(inst)
+        result.extend(a_insts)
+    return result
+
+
+def tacky_parse_function(t_func: TFunction) -> AsmFunction:
+    a_name = t_func.identifier
+    a_inst = tacky_parse_instructions(t_func.instructions)
+    return AsmFunction(a_name, a_inst)
+
+
+def tacky_parse_program(t_prog: TProgram) -> AsmProgram:
+    a_func = tacky_parse_function(t_prog.function)
+    return AsmProgram(a_func)

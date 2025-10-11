@@ -80,9 +80,33 @@ class Comment(Token):
     @classmethod
     def from_match(cls, m):
         return cls()
+    
+@dataclass
+class Tilde(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"~")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+@dataclass
+class Hyphen(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"-")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+@dataclass
+class Decrement(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"--")
+
+    @classmethod
+    def from_match(cls, m):
+        raise SyntaxError("Unrecognized token: --")
 
 
-TOKENS: List["Token"] = [Identifier, Constant, OpenParenthesis, CloseParenthesis, OpenBrace, CloseBrace, Semicolon, Comment]
+TOKENS: List["Token"] = [Identifier, Constant, OpenParenthesis, CloseParenthesis, OpenBrace, CloseBrace, Semicolon, Comment, Tilde, Hyphen, Decrement]
 WHITESPACE = re.compile(r"\s*")
 
 def match_token(text: str, pos: int) -> Tuple[int, "Token"]:
