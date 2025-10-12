@@ -1,6 +1,21 @@
 from lexer import *
 from dataclasses import *
 
+BINARY_OP_TOKENS = [Asterisk, ForwardSlash, PercentSign, PlusSign, Hyphen]
+
+BINARY_OP_PRECENDENCE_MAP = {
+    Asterisk: 50,
+    ForwardSlash: 50,
+    PercentSign: 50,
+    PlusSign: 45,
+    Hyphen: 45
+}
+
+def precedence(token: "Token") -> int:
+    if type(token) in BINARY_OP_TOKENS:
+        return BINARY_OP_PRECENDENCE_MAP[token.__class__]
+    raise SyntaxError
+
 class AstNode:
     def pretty_print(self, prefix = "", indent = 0):
         indent_str = " " * indent
@@ -54,7 +69,6 @@ class ExpressionNode(AstNode):
 class ConstantExpressionNode(ExpressionNode):
     const: int
 
-@dataclass
 class UnaryOperatorNode(AstNode):
     pass
 
@@ -66,10 +80,38 @@ class ComplementNode(UnaryOperatorNode):
 class NegateNode(UnaryOperatorNode):
     pass
 
+
+class BinaryOperatorNode(AstNode):
+    pass
+
+class AddOperatorNode(BinaryOperatorNode):
+    pass
+
+class SubtractOperatorNode(BinaryOperatorNode):
+    pass
+
+class MultiplyOperatorNode(BinaryOperatorNode):
+    pass
+
+class DivideOperatorNode(BinaryOperatorNode):
+    pass
+
+class RemainderOperatorNode(BinaryOperatorNode):
+    pass
+
+
 @dataclass
 class UnaryExpressionNode(ExpressionNode):
-    unary_operator: UnaryOperatorNode
-    expression: ExpressionNode
+    unary_operator: "UnaryOperatorNode"
+    expression: "ExpressionNode"
+
+
+@dataclass
+class BinaryExpressionNode(ExpressionNode):
+    binary_op: "BinaryOperatorNode"
+    exp1: "ExpressionNode"
+    exp2: "ExpressionNode"
+
 
 def expect(cls: Type, tokens: List["Token"]):
     result = bool(tokens) and isinstance(tokens[0], cls)
@@ -78,6 +120,9 @@ def expect(cls: Type, tokens: List["Token"]):
 
 def take_token(tokens: List["Token"]) -> "Token":
     return tokens.pop(0)
+
+def peek(tokens: List["Token"]) -> Optional["Token"]:
+    return tokens[0] if tokens else None
 
 def expect_and_take(cls: Type, tokens: List["Token"]) -> "Token":
     expect(cls, tokens)
@@ -90,7 +135,7 @@ def parse_unary_expression(tokens: List["Token"]) -> UnaryOperatorNode:
     token = take_token(tokens)
     if not is_unary(token):
         raise SyntaxError
-    exp = ast_parse_expression(tokens)
+    exp = ast_parse_factor(tokens)
     if isinstance(token, Tilde):
         return UnaryExpressionNode(ComplementNode(), exp)
     elif isinstance(token, Hyphen):
@@ -98,7 +143,33 @@ def parse_unary_expression(tokens: List["Token"]) -> UnaryOperatorNode:
     else:
         raise SyntaxError
 
-def ast_parse_expression(tokens: List["Token"]) -> "ExpressionNode":
+def ast_parse_binop(tokens: List["Token"]) -> BinaryOperatorNode:
+    token = take_token(tokens)
+    match token:
+        case Asterisk():
+            return MultiplyOperatorNode()
+        case ForwardSlash():
+            return DivideOperatorNode()
+        case PercentSign():
+            return RemainderOperatorNode()
+        case PlusSign():
+            return AddOperatorNode()
+        case Hyphen():
+            return SubtractOperatorNode()
+        case _:
+            SyntaxError
+
+def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
+    left = ast_parse_factor(tokens)
+    next_token = peek(tokens)
+    while type(next_token) in BINARY_OP_TOKENS and precedence(next_token) >= min_prec:
+        operator = ast_parse_binop(tokens)
+        right = ast_parse_exp(tokens, precedence(next_token) + 1)
+        left = BinaryExpressionNode(operator, left, right)
+        next_token = peek(tokens)
+    return left
+
+def ast_parse_factor(tokens: List["Token"]) -> "ExpressionNode":
     token = tokens[0] if tokens else None
     if token is None:
         raise SyntaxError("Unexpected end of file")
@@ -110,7 +181,7 @@ def ast_parse_expression(tokens: List["Token"]) -> "ExpressionNode":
         return parse_unary_expression(tokens)
     elif isinstance(token, OpenParenthesis):
         expect_and_take(OpenParenthesis, tokens)
-        exp = ast_parse_expression(tokens)
+        exp = ast_parse_exp(tokens, 0)
         expect_and_take(CloseParenthesis, tokens)
         return exp
     else:
@@ -131,7 +202,7 @@ def ast_parse_return(tokens: List["Token"]) -> "ReturnNode":
     if s_ret.name != "return":
         raise SyntaxError
     
-    s_exp = ast_parse_expression(tokens)
+    s_exp = ast_parse_exp(tokens, 0)
 
     expect_and_take(Semicolon, tokens)
 

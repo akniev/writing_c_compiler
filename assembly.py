@@ -74,11 +74,11 @@ class AsmStack(AsmOperand):
 class AsmRet(AsmInstruction):
     pass
 
-def ast_parse_expression(e: ExpressionNode) -> "AsmImmutable":
+def ast_parse_factor(e: ExpressionNode) -> "AsmImmutable":
     return AsmImmutable(e.const)
 
 def ast_parse_return(s: ReturnNode) -> List["AsmInstruction"]:
-    src = ast_parse_expression(s.exp)
+    src = ast_parse_factor(s.exp)
     dst = AsmRegister()
     return [
         AsmMove(src, dst),

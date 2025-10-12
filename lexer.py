@@ -98,6 +98,41 @@ class Hyphen(Token):
         return cls()
     
 @dataclass
+class PlusSign(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\+")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+@dataclass
+class Asterisk(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\*")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()       
+
+
+@dataclass
+class ForwardSlash(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"/")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+
+@dataclass
+class PercentSign(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"%")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+    
+@dataclass
 class Decrement(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"--")
 
@@ -106,7 +141,7 @@ class Decrement(Token):
         raise SyntaxError("Unrecognized token: --")
 
 
-TOKENS: List["Token"] = [Identifier, Constant, OpenParenthesis, CloseParenthesis, OpenBrace, CloseBrace, Semicolon, Comment, Tilde, Hyphen, Decrement]
+TOKENS: List["Token"] = [Identifier, Constant, OpenParenthesis, CloseParenthesis, OpenBrace, CloseBrace, Semicolon, Comment, Tilde, Hyphen, Decrement, PlusSign, Asterisk, ForwardSlash, PercentSign]
 WHITESPACE = re.compile(r"\s*")
 
 def match_token(text: str, pos: int) -> Tuple[int, "Token"]:
