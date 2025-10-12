@@ -52,9 +52,8 @@ def main(argv):
     if args.codegen:
         tokens = get_tokens(text)
         ast = parse(tokens)
-        asm_ast = ast_parse_asm(ast)
-        print(asm_ast)
-
+        tacky_ast = t_parse_program(ast)
+        asm_ast = tacky_parse_program(tacky_ast)
         return 0
     
     if args.tacky:
@@ -62,12 +61,12 @@ def main(argv):
         ast = parse(tokens)
         tacky_ast = t_parse_program(ast)
         print(tacky_ast)
-        
         return 0
 
     tokens = get_tokens(text)
     ast = parse(tokens)
-    asm_ast = ast_parse_asm(ast)
+    tacky_ast = t_parse_program(ast)
+    asm_ast = tacky_parse_program(tacky_ast)
     asm = gen_asm(asm_ast)
     print(asm)
 
