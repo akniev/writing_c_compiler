@@ -35,6 +35,14 @@ class TUnaryInstruction(TInstruction):
     dst: "TValue"
 
 
+@dataclass
+class TBinaryInstruction(TInstruction):
+    binaryOp: "TBinaryOperator"
+    src1: "TValue"
+    src2: "TValue"
+    dst: "TValue"
+
+
 class TValue(TackyNode):
     pass
 
@@ -48,6 +56,27 @@ class TConstant(TValue):
 class TVariable(TValue):
     identifier: str
 
+# Binary operators
+
+class TBinaryOperator(TackyNode):
+    pass
+
+class TAdditionOperator(TBinaryOperator):
+    pass
+
+class TSubtractionOperator(TBinaryOperator):
+    pass
+
+class TMultiplicationOperator(TBinaryOperator):
+    pass
+
+class TDivisionOperator(TBinaryOperator):
+    pass
+
+class TRemainderOperator(TBinaryOperator):
+    pass
+
+# Unary Operators
 
 class TUnaryOperator(TackyNode):
     pass
@@ -98,6 +127,22 @@ def t_parse_unop(op: UnaryOperatorNode) -> TUnaryOperator:
             raise SyntaxError
 
 
+def t_parse_binop(op: BinaryOperatorNode) -> TBinaryOperator:
+    match op:
+        case MultiplyOperatorNode():
+            return TMultiplicationOperator()
+        case DivideOperatorNode():
+            return TDivisionOperator()
+        case RemainderOperatorNode():
+            return TRemainderOperator()
+        case AddOperatorNode():
+            return TAdditionOperator()
+        case SubtractOperatorNode():
+            return TSubtractionOperator()
+        case _:
+            raise SyntaxError
+
+
 def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) -> "TValue":
     match exp:
         case ConstantExpressionNode(const):
@@ -108,6 +153,14 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             dst = TVariable(dst_name)
             t_op = t_parse_unop(op)
             instructions.append(TUnaryInstruction(t_op, src, dst))
+            return dst
+        case BinaryExpressionNode(op, exp1, exp2):
+            v1 = t_parse_expression(exp1, instructions)
+            v2 = t_parse_expression(exp2, instructions)
+            dst_name = get_temp_var_name()
+            dst = TVariable(dst_name)
+            t_op = t_parse_binop(op)
+            instructions.append(TBinaryInstruction(t_op, v1, v2, dst))
             return dst
         case _:
             raise SyntaxError
