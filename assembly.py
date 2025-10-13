@@ -140,6 +140,7 @@ class AsmR11(AsmReg):
     pass
 
 
+
 # Asm Operands
 
 class AsmOperand:
@@ -292,34 +293,38 @@ def get_stack_offset(identifier: str, offsets: dict) -> int:
     if not (identifier in offsets):
         n = len(offsets)
         offsets[identifier] = - (n + 1) * 4
-    return offsets[identifier]        
+    return offsets[identifier]
 
 
-def tacky_replace_pseudoregisters(node: AsmNode, offsets: dict) -> AsmNode:
+def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
     match node:
         case AsmProgram(asm_func):
-            return AsmProgram(tacky_replace_pseudoregisters(asm_func, offsets))
+            return AsmProgram(tacky_fix_asm(asm_func, offsets))
         case AsmFunction(name, f_insts):
             var_stack_offsets = dict()
-            a_insts = [tacky_replace_pseudoregisters(f_inst, var_stack_offsets) for f_inst in f_insts]
+            a_insts = [tacky_fix_asm(f_inst, var_stack_offsets) for f_inst in f_insts]
             var_count = len(var_stack_offsets)
             a_stack = AsmAllocateStack(4 * var_count)
             a_insts = [a_stack] + a_insts
 
-            a_insts_fixed = []
+            a_movs_fixed = []
             for a_inst in a_insts:
-                a_insts_fixed.extend(tacky_fix_movs(a_inst))
+                a_movs_fixed.extend(tacky_fix_movs_adds_subs(a_inst))
 
-            a_func = AsmFunction(name, a_insts_fixed)
+            a_divs_fixed = []
+            for a_inst in a_movs_fixed:
+                a_divs_fixed.extend(tacky_fix_idivs(a_inst))
+
+            a_func = AsmFunction(name, a_divs_fixed)
             return a_func
         case AsmMove(src, dst):
-            return AsmMove(tacky_replace_pseudoregisters(src, offsets), tacky_replace_pseudoregisters(dst, offsets))
+            return AsmMove(tacky_fix_asm(src, offsets), tacky_fix_asm(dst, offsets))
         case AsmUnary(unop, operand):
-            return AsmUnary(unop, tacky_replace_pseudoregisters(operand, offsets))
+            return AsmUnary(unop, tacky_fix_asm(operand, offsets))
         case AsmBinary(binop, op1, op2):
-            return AsmBinary(binop, tacky_replace_pseudoregisters(op1, offsets), tacky_replace_pseudoregisters(op2, offsets))
+            return AsmBinary(binop, tacky_fix_asm(op1, offsets), tacky_fix_asm(op2, offsets))
         case AsmIDiv(op):
-            return AsmIDiv(tacky_replace_pseudoregisters(op, offsets))
+            return AsmIDiv(tacky_fix_asm(op, offsets))
         case AsmRegister(_) | AsmImmutable(_) | AsmCdq() | AsmRet():
             return node
         case AsmPseudo(identifier):
@@ -328,12 +333,34 @@ def tacky_replace_pseudoregisters(node: AsmNode, offsets: dict) -> AsmNode:
             raise SyntaxError
 
 
-def tacky_fix_movs(node: AsmNode) -> List["AsmNode"]:
+def tacky_fix_idivs(node: AsmNode) -> List["AsmNode"]:
     match node:
-        case AsmMove(AsmStack(val1), AsmStack(val2)):
+        case AsmIDiv(AsmImmutable(_) as op):
             return [
-                AsmMove(AsmStack(val1), AsmRegister(AsmR10())),
-                AsmMove(AsmRegister(AsmR10()), AsmStack(val2))
+                AsmMove(op, AsmRegister(AsmR10())),
+                AsmIDiv(AsmRegister(AsmR10())),
+            ]
+        case _:
+            return [node]
+
+
+def tacky_fix_movs_adds_subs(node: AsmNode) -> List["AsmNode"]:
+    match node:
+        case AsmMove(AsmStack(_) as op1, AsmStack(_) as op2):
+            return [
+                AsmMove(op1, AsmRegister(AsmR10())),
+                AsmMove(AsmRegister(AsmR10()), op2)
+            ]
+        case AsmBinary(AsmAddOp() | AsmSubOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
+            return [
+                AsmMove(op1, AsmRegister(AsmR10())),
+                AsmBinary(binop, AsmRegister(AsmR10()), op2)
+            ]
+        case AsmBinary(AsmMultOp(), op1, AsmStack(_) as op2):
+            return [
+                AsmMove(op2, AsmRegister(AsmR11())),
+                AsmBinary(AsmMultOp(), op1, AsmRegister(AsmR11())),
+                AsmMove(AsmRegister(AsmR11()), op2)
             ]
         case _:
             return [node]
@@ -342,5 +369,5 @@ def tacky_fix_movs(node: AsmNode) -> List["AsmNode"]:
 def tacky_parse_program(t_prog: TProgram) -> AsmProgram:
     a_func = tacky_parse_function(t_prog.function)
     a_prog = AsmProgram(a_func)
-    a_prog_pseudo_replaced = tacky_replace_pseudoregisters(a_prog, dict())
+    a_prog_pseudo_replaced = tacky_fix_asm(a_prog, dict())
     return a_prog_pseudo_replaced

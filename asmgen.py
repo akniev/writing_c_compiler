@@ -4,14 +4,18 @@ def reg_to_string(reg: "AsmReg") -> str:
     match reg:
         case AsmAX():
             return f"%eax"
-        case AsmR10:
+        case AsmR10():
             return f"%r10d"
+        case AsmR11():
+            return f"%r11d"
+        case AsmDX():
+            return f"%edx"
+        case _:
+            raise SyntaxError
 
 
 def operand_to_string(op: AsmOperand):
     match op:
-        case AsmRegister():
-            return "%eax"
         case AsmImmutable(value):
             return f"${value}"
         case AsmRegister(reg):
@@ -28,6 +32,14 @@ def operator_to_string(operator: AsmUnaryOperator) -> str:
             return "negl"
         case AsmNot():
             return "notl"
+        case AsmAddOp():
+            return "addl"
+        case AsmSubOp():
+            return "subl"
+        case AsmMultOp():
+            return "imull"
+        case _:
+            raise SyntaxError
 
 
 def print_instruction(ins: AsmInstruction) -> str:
@@ -38,6 +50,12 @@ def print_instruction(ins: AsmInstruction) -> str:
             return f"subq ${value}, %rsp"
         case AsmUnary(operator, operand):
             return f"{operator_to_string(operator)} {operand_to_string(operand)}"
+        case AsmBinary(binop, op1, op2):
+            return f"{operator_to_string(binop)} {operand_to_string(op1)}, {operand_to_string(op2)}"
+        case AsmIDiv(op):
+            return f"idivl {operand_to_string(op)}"
+        case AsmCdq():
+            return "cdq"
         case AsmRet():
             return f"""
   movq %rbp, %rsp

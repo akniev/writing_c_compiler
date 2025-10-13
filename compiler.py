@@ -69,6 +69,7 @@ def main(argv):
     ast = parse(tokens)
     tacky_ast = t_parse_program(ast)
     asm_ast = tacky_parse_program(tacky_ast)
+    asm_ast.pretty_print()
     asm = gen_asm(asm_ast)
     print(asm)
 
