@@ -33,7 +33,6 @@ class Constant(Token):
     def from_match(cls, m):
         return cls(int(m.group(0)))
 
-@dataclass
 class OpenParenthesis(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\(")
 
@@ -41,7 +40,6 @@ class OpenParenthesis(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class CloseParenthesis(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\)")
 
@@ -49,7 +47,6 @@ class CloseParenthesis(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class OpenBrace(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"{")
 
@@ -57,7 +54,6 @@ class OpenBrace(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class CloseBrace(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"}")
 
@@ -65,7 +61,6 @@ class CloseBrace(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class Semicolon(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r";")
 
@@ -73,23 +68,20 @@ class Semicolon(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class Comment(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\/\/.*|\/\*[\s\S]*?\*\/")
 
     @classmethod
     def from_match(cls, m):
         return cls()
-    
-@dataclass
+
 class CompilerDirective(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"^#.*", re.MULTILINE)
 
     @classmethod
     def from_match(cls, m):
         return cls()
-    
-@dataclass
+
 class Tilde(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"~")
 
@@ -97,15 +89,13 @@ class Tilde(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class Hyphen(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"-")
 
     @classmethod
     def from_match(cls, m):
         return cls()
-    
-@dataclass
+
 class PlusSign(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\+")
 
@@ -113,7 +103,6 @@ class PlusSign(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class Asterisk(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\*")
 
@@ -121,8 +110,6 @@ class Asterisk(Token):
     def from_match(cls, m):
         return cls()       
 
-
-@dataclass
 class ForwardSlash(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"/")
 
@@ -130,8 +117,6 @@ class ForwardSlash(Token):
     def from_match(cls, m):
         return cls()
 
-
-@dataclass
 class PercentSign(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"%")
 
@@ -139,17 +124,13 @@ class PercentSign(Token):
     def from_match(cls, m):
         return cls()
 
-    
-@dataclass
 class Decrement(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"--")
 
     @classmethod
     def from_match(cls, m):
         raise SyntaxError("Unrecognized token: --")
-    
 
-@dataclass
 class Ampersand(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"&")
 
@@ -157,7 +138,6 @@ class Ampersand(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class Caret(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\^")
 
@@ -165,15 +145,13 @@ class Caret(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class Pipe(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\|")
 
     @classmethod
     def from_match(cls, m):
         return cls()
-    
-@dataclass
+
 class LeftShift(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"<<")
 
@@ -181,7 +159,6 @@ class LeftShift(Token):
     def from_match(cls, m):
         return cls()
 
-@dataclass
 class RightShift(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r">>")
 
