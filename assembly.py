@@ -48,6 +48,9 @@ class AsmFunction(AsmNode):
     instructions: List["AsmInstruction"]
 
 
+
+
+
 # Instructions
 
 class AsmInstruction(AsmNode):
@@ -55,6 +58,11 @@ class AsmInstruction(AsmNode):
 
 @dataclass
 class AsmMove(AsmInstruction):
+    src: "AsmOperand"
+    dst: "AsmOperand"
+
+@dataclass
+class AsmMove8(AsmInstruction):
     src: "AsmOperand"
     dst: "AsmOperand"
 
@@ -88,6 +96,7 @@ class AsmCdq(AsmInstruction):
 
 
 
+
 # Unary operators
 
 class AsmUnaryOperator(AsmNode):
@@ -98,6 +107,8 @@ class AsmNeg(AsmUnaryOperator):
 
 class AsmNot(AsmUnaryOperator):
     pass
+
+
 
 
 
@@ -115,7 +126,20 @@ class AsmSubOp(AsmBinaryOp):
 class AsmMultOp(AsmBinaryOp):
     pass
 
+class AsmShrOp(AsmBinaryOp):
+    pass
 
+class AsmShlOp(AsmBinaryOp):
+    pass
+
+class AsmAndOp(AsmBinaryOp):
+    pass
+
+class AsmXorOp(AsmBinaryOp):
+    pass
+
+class AsmOrOp(AsmBinaryOp):
+    pass
 
 
 
@@ -139,6 +163,8 @@ class AsmDX(AsmReg):
 class AsmR11(AsmReg):
     pass
 
+class AsmCL(AsmReg):
+    pass
 
 
 # Asm Operands
@@ -220,6 +246,16 @@ def tacky_parse_binary_operator(t_binop: TBinaryOperator) -> AsmBinaryOp:
             return AsmMultOp()
         case TDivisionOperator() | TRemainderOperator():
             return AsmIDiv()
+        case TLeftShiftOperator():
+            return AsmShlOp()
+        case TRightShiftOperator():
+            return AsmShrOp()
+        case TBitwiseAndOperator():
+            return AsmAndOp()
+        case TBitwiseXorOperator():
+            return AsmXorOp()
+        case TBitwiseOrOperator():
+            return AsmOrOp()
         case _:
             raise SyntaxError
 
@@ -242,7 +278,12 @@ def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
             ]
         case TBinaryInstruction(TAdditionOperator()
                                 | TSubtractionOperator() 
-                                | TMultiplicationOperator() as binop, src1, src2, dst):
+                                | TMultiplicationOperator()
+                                | TLeftShiftOperator()
+                                | TRightShiftOperator()
+                                | TBitwiseAndOperator()
+                                | TBitwiseXorOperator()
+                                | TBitwiseOrOperator() as binop, src1, src2, dst):
             a_binop = tacky_parse_binary_operator(binop)
             a_src1 = tacky_parse_value(src1)
             a_src2 = tacky_parse_value(src2)
@@ -351,10 +392,19 @@ def tacky_fix_movs_adds_subs(node: AsmNode) -> List["AsmNode"]:
                 AsmMove(op1, AsmRegister(AsmR10())),
                 AsmMove(AsmRegister(AsmR10()), op2)
             ]
-        case AsmBinary(AsmAddOp() | AsmSubOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
+        case AsmBinary(AsmAddOp() 
+                       | AsmSubOp() 
+                       | AsmAndOp() 
+                       | AsmXorOp() 
+                       | AsmOrOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
             return [
                 AsmMove(op1, AsmRegister(AsmR10())),
                 AsmBinary(binop, AsmRegister(AsmR10()), op2)
+            ]
+        case AsmBinary(AsmShlOp() | AsmShrOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
+            return [
+                AsmMove8(op1, AsmRegister(AsmCL())),
+                AsmBinary(binop, AsmRegister(AsmCL()), op2)
             ]
         case AsmBinary(AsmMultOp(), op1, AsmStack(_) as op2):
             return [

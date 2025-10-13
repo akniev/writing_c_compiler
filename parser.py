@@ -1,14 +1,19 @@
 from lexer import *
 from dataclasses import *
 
-BINARY_OP_TOKENS = [Asterisk, ForwardSlash, PercentSign, PlusSign, Hyphen]
+BINARY_OP_TOKENS = [Asterisk, ForwardSlash, PercentSign, PlusSign, Hyphen, Ampersand, Caret, Pipe, LeftShift, RightShift]
 
 BINARY_OP_PRECENDENCE_MAP = {
     Asterisk: 50,
     ForwardSlash: 50,
     PercentSign: 50,
     PlusSign: 45,
-    Hyphen: 45
+    Hyphen: 45,
+    LeftShift: 40,
+    RightShift: 40,
+    Ampersand: 35,
+    Caret: 30,
+    Pipe: 25
 }
 
 def precedence(token: "Token") -> int:
@@ -76,6 +81,11 @@ class ExpressionNode(AstNode):
 class ConstantExpressionNode(ExpressionNode):
     const: int
 
+
+
+
+# Unary Operators
+
 class UnaryOperatorNode(AstNode):
     pass
 
@@ -87,6 +97,9 @@ class ComplementNode(UnaryOperatorNode):
 class NegateNode(UnaryOperatorNode):
     pass
 
+
+
+# Binary Operators
 
 class BinaryOperatorNode(AstNode):
     pass
@@ -106,6 +119,25 @@ class DivideOperatorNode(BinaryOperatorNode):
 class RemainderOperatorNode(BinaryOperatorNode):
     pass
 
+class LeftShiftOperatorNode(BinaryOperatorNode):
+    pass
+
+class RightShiftOperatorNode(BinaryOperatorNode):
+    pass
+
+class BitwiseAndOpeatorNode(BinaryOperatorNode):
+    pass
+
+class BitwiseOrOperatorNode(BinaryOperatorNode):
+    pass
+
+class BitwiseXorOperatorNode(BinaryOperatorNode):
+    pass
+
+
+
+
+# Unary Expressions
 
 @dataclass
 class UnaryExpressionNode(ExpressionNode):
@@ -113,11 +145,21 @@ class UnaryExpressionNode(ExpressionNode):
     expression: "ExpressionNode"
 
 
+
+
+
+# Binary Expressions
+
 @dataclass
 class BinaryExpressionNode(ExpressionNode):
     binary_op: "BinaryOperatorNode"
     exp1: "ExpressionNode"
     exp2: "ExpressionNode"
+
+
+
+
+
 
 
 def expect(cls: Type, tokens: List["Token"]):
@@ -163,6 +205,16 @@ def ast_parse_binop(tokens: List["Token"]) -> BinaryOperatorNode:
             return AddOperatorNode()
         case Hyphen():
             return SubtractOperatorNode()
+        case Ampersand():
+            return BitwiseAndOpeatorNode()
+        case Caret():
+            return BitwiseXorOperatorNode()
+        case Pipe():
+            return BitwiseOrOperatorNode()
+        case LeftShift():
+            return LeftShiftOperatorNode()
+        case RightShift():
+            return RightShiftOperatorNode()
         case _:
             SyntaxError
 

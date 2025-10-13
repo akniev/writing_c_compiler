@@ -80,10 +80,7 @@ class TBinaryInstruction(TInstruction):
 
 
 
-
-
-
-
+# Values
 
 class TValue(TackyNode):
     pass
@@ -97,6 +94,9 @@ class TConstant(TValue):
 @dataclass
 class TVariable(TValue):
     identifier: str
+
+
+
 
 # Binary operators
 
@@ -117,6 +117,25 @@ class TDivisionOperator(TBinaryOperator):
 
 class TRemainderOperator(TBinaryOperator):
     pass
+
+class TLeftShiftOperator(TBinaryOperator):
+    pass
+
+class TRightShiftOperator(TBinaryOperator):
+    pass
+
+class TBitwiseAndOperator(TBinaryOperator):
+    pass
+
+class TBitwiseXorOperator(TBinaryOperator):
+    pass
+
+class TBitwiseOrOperator(TBinaryOperator):
+    pass
+
+
+
+
 
 # Unary Operators
 
@@ -181,6 +200,16 @@ def t_parse_binop(op: BinaryOperatorNode) -> TBinaryOperator:
             return TAdditionOperator()
         case SubtractOperatorNode():
             return TSubtractionOperator()
+        case LeftShiftOperatorNode():
+            return TLeftShiftOperator()
+        case RightShiftOperatorNode():
+            return TRightShiftOperator()
+        case BitwiseAndOpeatorNode():
+            return TBitwiseAndOperator()
+        case BitwiseXorOperatorNode():
+            return TBitwiseXorOperator()
+        case BitwiseOrOperatorNode():
+            return TBitwiseOrOperator()
         case _:
             raise SyntaxError
 

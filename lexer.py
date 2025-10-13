@@ -82,6 +82,14 @@ class Comment(Token):
         return cls()
     
 @dataclass
+class CompilerDirective(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"^#.*", re.MULTILINE)
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+@dataclass
 class Tilde(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"~")
 
@@ -139,9 +147,72 @@ class Decrement(Token):
     @classmethod
     def from_match(cls, m):
         raise SyntaxError("Unrecognized token: --")
+    
+
+@dataclass
+class Ampersand(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"&")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+@dataclass
+class Caret(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\^")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+@dataclass
+class Pipe(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\|")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+@dataclass
+class LeftShift(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"<<")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+@dataclass
+class RightShift(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r">>")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
 
 
-TOKENS: List["Token"] = [Identifier, Constant, OpenParenthesis, CloseParenthesis, OpenBrace, CloseBrace, Semicolon, Comment, Tilde, Hyphen, Decrement, PlusSign, Asterisk, ForwardSlash, PercentSign]
+TOKENS: List["Token"] = [
+    Identifier, 
+    Constant, 
+    OpenParenthesis, 
+    CloseParenthesis, 
+    OpenBrace, 
+    CloseBrace, 
+    Semicolon, 
+    Comment, 
+    CompilerDirective,
+    Tilde, 
+    Hyphen, 
+    Decrement, 
+    PlusSign, 
+    Asterisk, 
+    ForwardSlash, 
+    PercentSign,
+    Ampersand,
+    Caret,
+    Pipe,
+    LeftShift,
+    RightShift,
+]
 WHITESPACE = re.compile(r"\s*")
 
 def match_token(text: str, pos: int) -> Tuple[int, "Token"]:
@@ -171,7 +242,7 @@ def get_tokens(text: str):
         if token is None:
             raise "Error parsing file"
         
-        if not isinstance(token, Comment):
+        if not isinstance(token, Comment) and not isinstance(token, CompilerDirective):
             tokens.append(token)
         i = new_i
     return tokens

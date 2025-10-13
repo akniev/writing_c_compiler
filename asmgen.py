@@ -10,6 +10,8 @@ def reg_to_string(reg: "AsmReg") -> str:
             return f"%r11d"
         case AsmDX():
             return f"%edx"
+        case AsmCL():
+            return f"%cl"
         case _:
             raise SyntaxError
 
@@ -38,6 +40,16 @@ def operator_to_string(operator: AsmUnaryOperator) -> str:
             return "subl"
         case AsmMultOp():
             return "imull"
+        case AsmShlOp():
+            return "sall"
+        case AsmShrOp():
+            return "sarl"
+        case AsmAndOp():
+            return "andl"
+        case AsmXorOp():
+            return "xorl"
+        case AsmOrOp():
+            return "orl"
         case _:
             raise SyntaxError
 
@@ -46,6 +58,8 @@ def print_instruction(ins: AsmInstruction) -> str:
     match ins:
         case AsmMove(src, dst):
             return f"movl {operand_to_string(src)}, {operand_to_string(dst)}"
+        case AsmMove8(src, dst):
+            return f"movb {operand_to_string(src)}, {operand_to_string(dst)}"
         case AsmAllocateStack(value):
             return f"subq ${value}, %rsp"
         case AsmUnary(operator, operand):
