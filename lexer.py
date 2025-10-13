@@ -166,6 +166,68 @@ class RightShift(Token):
     def from_match(cls, m):
         return cls()
 
+class ExclamationMark(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\!")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+class TwoAmbersands(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"&&")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class TwoPipes(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\|\|")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class DoubleEqualSign(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"==")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class ExclamationEqualSign(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"!=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class LessThan(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"<")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+class GreaterThan(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r">")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+class LessOrEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"<=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+class GreaterOrEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r">=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
 
 TOKENS: List["Token"] = [
     Identifier, 
@@ -189,6 +251,15 @@ TOKENS: List["Token"] = [
     Pipe,
     LeftShift,
     RightShift,
+    ExclamationMark,
+    TwoAmbersands,
+    TwoPipes,
+    DoubleEqualSign,
+    ExclamationEqualSign,
+    LessThan,
+    GreaterThan,
+    LessOrEqual,
+    GreaterOrEqual
 ]
 WHITESPACE = re.compile(r"\s*")
 
