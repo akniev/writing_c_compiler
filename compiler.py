@@ -54,13 +54,14 @@ def main(argv):
         ast = parse(tokens)
         tacky_ast = t_parse_program(ast)
         asm_ast = tacky_parse_program(tacky_ast)
+        asm_ast.pretty_print()
         return 0
     
     if args.tacky:
         tokens = get_tokens(text)
         ast = parse(tokens)
         tacky_ast = t_parse_program(ast)
-        print(tacky_ast)
+        tacky_ast.pretty_print()
         return 0
 
     tokens = get_tokens(text)

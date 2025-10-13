@@ -38,6 +38,13 @@ class AstNode:
             f_val = fs[f_name]
             if isinstance(f_val, AstNode):
                 f_val.pretty_print(indent_str + "  " + f_name + " = ", indent + 2)
+            elif isinstance(f_val, list):
+                print(indent_str + "  " + f_name + " = [")
+                for el in f_val:
+                    el.pretty_print(indent = indent + 4)
+                
+                print(indent_str + "  " + "]")
+
             else:
                 print(indent_str + "  " + f_name + " = " + repr(f_val))
 

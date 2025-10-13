@@ -5,7 +5,38 @@ from tacky import *
 import weakref
 
 class AsmNode:
-    pass
+    def pretty_print(self, prefix = "", indent = 0):
+        indent_str = " " * indent
+        name = self.__class__.__name__
+        fs = vars(self)
+
+        if len(fs) == 0:
+            if len(prefix) > 0:
+                print(prefix + name + "()")
+            else:
+                print(indent_str + name + "()")
+            return
+        
+        if len(prefix) > 0:
+            print(prefix + name + "(")
+        else:
+            print(indent_str + name + "(")
+
+        for f_name in fs.keys():
+            f_val = fs[f_name]
+            if isinstance(f_val, AsmNode):
+                f_val.pretty_print(indent_str + "  " + f_name + " = ", indent + 2)
+            elif isinstance(f_val, list):
+                print(indent_str + "  " + f_name + " = [")
+                for el in f_val:
+                    el.pretty_print(indent = indent + 4)
+                
+                print(indent_str + "  " + "]")
+
+            else:
+                print(indent_str + "  " + f_name + " = " + repr(f_val))
+
+        print(indent_str + ")")
 
 @dataclass
 class AsmProgram(AsmNode):
@@ -16,7 +47,10 @@ class AsmFunction(AsmNode):
     name: str
     instructions: List["AsmInstruction"]
 
-class AsmInstruction:
+
+# Instructions
+
+class AsmInstruction(AsmNode):
     pass
 
 @dataclass
@@ -33,6 +67,29 @@ class AsmUnary(AsmInstruction):
 class AsmAllocateStack(AsmInstruction):
     value: int
 
+@dataclass
+class AsmRet(AsmInstruction):
+    pass
+
+@dataclass
+class AsmBinary(AsmInstruction):
+    binop: "AsmBinaryOp"
+    operand1: "AsmOperand"
+    operand2: "AsmOperand"
+
+@dataclass
+class AsmIDiv(AsmInstruction):
+    operand: "AsmOperand"
+
+@dataclass
+class AsmCdq(AsmInstruction):
+    pass
+
+
+
+
+# Unary operators
+
 class AsmUnaryOperator(AsmNode):
     pass
 
@@ -42,12 +99,30 @@ class AsmNeg(AsmUnaryOperator):
 class AsmNot(AsmUnaryOperator):
     pass
 
-class AsmOperand:
+
+
+# Binary operators
+
+class AsmBinaryOp(AsmNode):
     pass
 
-@dataclass
-class AsmRegister(AsmOperand):
-    reg: "AsmReg"
+class AsmAddOp(AsmBinaryOp):
+    pass
+
+class AsmSubOp(AsmBinaryOp):
+    pass
+
+class AsmMultOp(AsmBinaryOp):
+    pass
+
+
+
+
+
+
+
+
+# Asm Registers
 
 class AsmReg(AsmNode):
     pass
@@ -57,6 +132,22 @@ class AsmAX(AsmReg):
 
 class AsmR10(AsmReg):
     pass
+
+class AsmDX(AsmReg):
+    pass
+
+class AsmR11(AsmReg):
+    pass
+
+
+# Asm Operands
+
+class AsmOperand:
+    pass
+
+@dataclass
+class AsmRegister(AsmOperand):
+    reg: "AsmReg"
 
 @dataclass
 class AsmImmutable(AsmOperand):
@@ -70,9 +161,12 @@ class AsmPseudo(AsmOperand):
 class AsmStack(AsmOperand):
     value: int
 
-@dataclass
-class AsmRet(AsmInstruction):
-    pass
+
+
+
+
+
+
 
 def ast_parse_factor(e: ExpressionNode) -> "AsmImmutable":
     return AsmImmutable(e.const)
@@ -181,6 +275,20 @@ def tacky_parse_unary_operator(t_unop: TUnaryOperator) -> AsmUnaryOperator:
             raise SyntaxError
 
 
+def tacky_parse_binary_operator(t_binop: TBinaryOperator) -> AsmBinaryOp:
+    match t_binop:
+        case TAdditionOperator():
+            return AsmAddOp()
+        case TSubtractionOperator():
+            return AsmSubOp()
+        case TMultiplicationOperator():
+            return AsmMultOp()
+        case TDivisionOperator() | TRemainderOperator():
+            return AsmIDiv()
+        case _:
+            raise SyntaxError
+
+
 def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
     match t_inst:
         case TReturnInstruction(val):
@@ -196,6 +304,37 @@ def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
             return [
                 AsmMove(a_src, a_dst),
                 AsmUnary(a_unop, a_dst)
+            ]
+        case TBinaryInstruction(TAdditionOperator()
+                                | TSubtractionOperator() 
+                                | TMultiplicationOperator() as binop, src1, src2, dst):
+            a_binop = tacky_parse_binary_operator(binop)
+            a_src1 = tacky_parse_value(src1)
+            a_src2 = tacky_parse_value(src2)
+            a_dst = tacky_parse_value(dst)
+            return [
+                AsmMove(a_src1, a_dst),
+                AsmBinary(a_binop, a_src2, a_dst)
+            ]
+        case TBinaryInstruction(TDivisionOperator(), src1, src2, dst):
+            a_src1 = tacky_parse_value(src1)
+            a_src2 = tacky_parse_value(src2)
+            a_dst = tacky_parse_value(dst)
+            return [
+                AsmMove(a_src1, AsmRegister(AsmAX())),
+                AsmCdq(),
+                AsmIDiv(a_src2),
+                AsmMove(AsmRegister(AsmAX()), a_dst),
+            ]
+        case TBinaryInstruction(TRemainderOperator(), src1, src2, dst):
+            a_src1 = tacky_parse_value(src1)
+            a_src2 = tacky_parse_value(src2)
+            a_dst = tacky_parse_value(dst)
+            return [
+                AsmMove(a_src1, AsmRegister(AsmAX())),
+                AsmCdq(),
+                AsmIDiv(a_src2),
+                AsmMove(AsmRegister(AsmDX()), a_dst),
             ]
         case _:
             raise SyntaxError
@@ -243,7 +382,11 @@ def tacky_replace_pseudoregisters(node: AsmNode, offsets: dict) -> AsmNode:
             return AsmMove(tacky_replace_pseudoregisters(src, offsets), tacky_replace_pseudoregisters(dst, offsets))
         case AsmUnary(unop, operand):
             return AsmUnary(unop, tacky_replace_pseudoregisters(operand, offsets))
-        case AsmRegister(_) | AsmImmutable(_) | AsmRet():
+        case AsmBinary(binop, op1, op2):
+            return AsmBinary(binop, tacky_replace_pseudoregisters(op1, offsets), tacky_replace_pseudoregisters(op2, offsets))
+        case AsmIDiv(op):
+            return AsmIDiv(tacky_replace_pseudoregisters(op, offsets))
+        case AsmRegister(_) | AsmImmutable(_) | AsmCdq() | AsmRet():
             return node
         case AsmPseudo(identifier):
             return AsmStack(get_stack_offset(identifier, offsets))

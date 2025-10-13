@@ -3,7 +3,38 @@ from typing import List
 from parser import *
 
 class TackyNode:
-    pass
+    def pretty_print(self, prefix = "", indent = 0):
+        indent_str = " " * indent
+        name = self.__class__.__name__
+        fs = vars(self)
+
+        if len(fs) == 0:
+            if len(prefix) > 0:
+                print(prefix + name + "()")
+            else:
+                print(indent_str + name + "()")
+            return
+        
+        if len(prefix) > 0:
+            print(prefix + name + "(")
+        else:
+            print(indent_str + name + "(")
+
+        for f_name in fs.keys():
+            f_val = fs[f_name]
+            if isinstance(f_val, TackyNode):
+                f_val.pretty_print(indent_str + "  " + f_name + " = ", indent + 2)
+            elif isinstance(f_val, list):
+                print(indent_str + "  " + f_name + " = [")
+                for el in f_val:
+                    el.pretty_print(indent = indent + 4)
+                
+                print(indent_str + "  " + "]")
+
+            else:
+                print(indent_str + "  " + f_name + " = " + repr(f_val))
+
+        print(indent_str + ")")
 
 
 var_counter = 0
@@ -19,6 +50,9 @@ class TFunction(TackyNode):
     identifier: str
     instructions: List["TInstruction"]
 
+
+
+# TACKY Instructions
 
 class TInstruction(TackyNode):
     pass
@@ -41,6 +75,14 @@ class TBinaryInstruction(TInstruction):
     src1: "TValue"
     src2: "TValue"
     dst: "TValue"
+
+
+
+
+
+
+
+
 
 
 class TValue(TackyNode):
