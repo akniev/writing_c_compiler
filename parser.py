@@ -1,24 +1,51 @@
 from lexer import *
 from dataclasses import *
 
-BINARY_OP_TOKENS = [Asterisk, ForwardSlash, PercentSign, PlusSign, Hyphen, Ampersand, Caret, Pipe, LeftShift, RightShift]
+BINARY_OP_TOKENS = [
+    Asterisk, 
+    ForwardSlash, 
+    PercentSign,
+    PlusSign, 
+    Hyphen, 
+    Ampersand, 
+    Caret, 
+    Pipe, 
+    LeftShift, 
+    RightShift,
+    TwoAmbersands,
+    TwoPipes,
+    TwoEqualSigns,
+    ExclamationEqualSign,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
+]
 
 BINARY_OP_PRECENDENCE_MAP = {
-    Asterisk: 50,
-    ForwardSlash: 50,
-    PercentSign: 50,
-    PlusSign: 45,
-    Hyphen: 45,
-    LeftShift: 40,
-    RightShift: 40,
-    Ampersand: 35,
-    Caret: 30,
-    Pipe: 25
+    Asterisk: 50,               # *
+    ForwardSlash: 50,           # /
+    PercentSign: 50,            # %
+    PlusSign: 45,               # +
+    Hyphen: 45,                 # -
+    LeftShift: 40,              # <<
+    RightShift: 40,             # >>
+    LessThan: 39,               # <
+    GreaterThan: 39,            # >
+    LessOrEqual: 39,            # <=
+    GreaterOrEqual: 39,         # >=
+    TwoEqualSigns: 38,          # ==
+    ExclamationEqualSign: 38,   # !=
+    Ampersand: 35,              # &
+    Caret: 30,                  # ^
+    Pipe: 25,                   # |
+    TwoAmbersands: 20,          # &&
+    TwoPipes: 15,               # ||
 }
 
 def precedence(token: "Token") -> int:
     if type(token) in BINARY_OP_TOKENS:
-        return BINARY_OP_PRECENDENCE_MAP[token.__class__]
+        return BINARY_OP_PRECENDENCE_MAP[type(token)]
     raise SyntaxError
 
 class AstNode:
@@ -73,14 +100,6 @@ class StatementNode(AstNode):
 class ReturnNode(StatementNode):
     exp: "ExpressionNode"
 
-@dataclass
-class ExpressionNode(AstNode):
-    pass
-
-@dataclass
-class ConstantExpressionNode(ExpressionNode):
-    const: int
-
 
 
 
@@ -89,14 +108,14 @@ class ConstantExpressionNode(ExpressionNode):
 class UnaryOperatorNode(AstNode):
     pass
 
-@dataclass
-class ComplementNode(UnaryOperatorNode):
+class ComplementOperatorNode(UnaryOperatorNode):
     pass
 
-@dataclass
-class NegateNode(UnaryOperatorNode):
+class NegateOperatorNode(UnaryOperatorNode):
     pass
 
+class NotOperatorNode(UnaryOperatorNode):
+    pass
 
 
 # Binary Operators
@@ -134,21 +153,45 @@ class BitwiseOrOperatorNode(BinaryOperatorNode):
 class BitwiseXorOperatorNode(BinaryOperatorNode):
     pass
 
+class LogicalAndOperatorNode(BinaryOperatorNode):
+    pass
+
+class LogicalOrOperatorNode(BinaryOperatorNode):
+    pass
+
+class EqualOperatorNode(BinaryOperatorNode):
+    pass
+
+class NotEqualOperatorNode(BinaryOperatorNode):
+    pass
+
+class LessThanOperatorNode(BinaryOperatorNode):
+    pass
+
+class GreaterThanOperatorNode(BinaryOperatorNode):
+    pass
+
+class LessOrEqualOperatorNode(BinaryOperatorNode):
+    pass
+
+class GreaterOrEqualOperatorNode(BinaryOperatorNode):
+    pass
 
 
 
-# Unary Expressions
+# Expressions
+
+class ExpressionNode(AstNode):
+    pass
+
+@dataclass
+class ConstantExpressionNode(ExpressionNode):
+    const: int
 
 @dataclass
 class UnaryExpressionNode(ExpressionNode):
     unary_operator: "UnaryOperatorNode"
     expression: "ExpressionNode"
-
-
-
-
-
-# Binary Expressions
 
 @dataclass
 class BinaryExpressionNode(ExpressionNode):
@@ -178,19 +221,25 @@ def expect_and_take(cls: Type, tokens: List["Token"]) -> "Token":
     return take_token(tokens)
 
 def is_unary(token):
-    return isinstance(token, Tilde) or isinstance(token, Hyphen)
+    return isinstance(token, Tilde) or isinstance(token, Hyphen) or isinstance(token, ExclamationMark)
+
+def get_unary_operator(token):
+    match token:
+        case Tilde():
+            return ComplementOperatorNode()
+        case Hyphen():
+            return NegateOperatorNode()
+        case ExclamationMark():
+            return NotOperatorNode()
+        case _:
+            raise SyntaxError
 
 def parse_unary_expression(tokens: List["Token"]) -> UnaryOperatorNode:
     token = take_token(tokens)
     if not is_unary(token):
         raise SyntaxError
     exp = ast_parse_factor(tokens)
-    if isinstance(token, Tilde):
-        return UnaryExpressionNode(ComplementNode(), exp)
-    elif isinstance(token, Hyphen):
-        return UnaryExpressionNode(NegateNode(), exp)
-    else:
-        raise SyntaxError
+    return UnaryExpressionNode(get_unary_operator(token), exp)
 
 def ast_parse_binop(tokens: List["Token"]) -> BinaryOperatorNode:
     token = take_token(tokens)
@@ -215,6 +264,22 @@ def ast_parse_binop(tokens: List["Token"]) -> BinaryOperatorNode:
             return LeftShiftOperatorNode()
         case RightShift():
             return RightShiftOperatorNode()
+        case TwoAmbersands():
+            return LogicalAndOperatorNode()
+        case TwoPipes():
+            return LogicalOrOperatorNode()
+        case TwoEqualSigns():
+            return EqualOperatorNode()
+        case ExclamationEqualSign():
+            return NotEqualOperatorNode()
+        case LessThan():
+            return LessThanOperatorNode()
+        case LessOrEqual():
+            return LessOrEqualOperatorNode()
+        case GreaterThan():
+            return GreaterThanOperatorNode()
+        case GreaterOrEqual():
+            return GreaterOrEqualOperatorNode()
         case _:
             SyntaxError
 

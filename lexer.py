@@ -187,7 +187,7 @@ class TwoPipes(Token):
     def from_match(cls, m):
         return cls()
 
-class DoubleEqualSign(Token):
+class TwoEqualSigns(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"==")
 
     @classmethod
@@ -254,7 +254,7 @@ TOKENS: List["Token"] = [
     ExclamationMark,
     TwoAmbersands,
     TwoPipes,
-    DoubleEqualSign,
+    TwoEqualSigns,
     ExclamationEqualSign,
     LessThan,
     GreaterThan,

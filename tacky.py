@@ -180,9 +180,9 @@ def get_temp_var_name() -> str:
 
 def t_parse_unop(op: UnaryOperatorNode) -> TUnaryOperator:
     match op:
-        case ComplementNode():
+        case ComplementOperatorNode():
             return TComplementOp()
-        case NegateNode():
+        case NegateOperatorNode():
             return TNegateOp()
         case _:
             raise SyntaxError
