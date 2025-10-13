@@ -9,6 +9,7 @@ from typing import *
 from parser import *
 from assembly import *
 from tacky import *
+from asmgen import *
 import subprocess
 
 
@@ -85,9 +86,6 @@ def main(argv):
         print(result.stderr)
     else:
         print("Compilation succeeded!")
-    # t_path = "/home/akniev/projects/tmp/" + args.path.split('/')[-1] + ".args.txt"
-    # with open(t_path, "w", encoding="utf-8") as f:
-    #     return f.write(repr(sys.argv))
 
 
 if __name__ == "__main__":
