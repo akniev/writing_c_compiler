@@ -222,7 +222,7 @@ def get_temp_var_name() -> str:
 def get_label_name(name: str) -> str:
     global label_counter
     label_counter += 1
-    return f"_lbl.{name}.{label_counter}"
+    return f"{name}.{label_counter}"
 
 
 def t_parse_unop(op: UnaryOperatorNode) -> TUnaryOperator:
@@ -289,6 +289,7 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
         case BinaryExpressionNode(LogicalAndOperatorNode(), exp1, exp2):
             false_label_name = get_label_name("false")
             end_label_name = get_label_name("end")
+            result = TVariable(get_temp_var_name())
             v1 = t_parse_expression(exp1, instructions)
             instructions.extend([
                 TJumpIfZeroInstruction(v1, false_label_name),
@@ -296,16 +297,17 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             v2 = t_parse_expression(exp2, instructions)
             instructions.extend([
                 TJumpIfZeroInstruction(v2, false_label_name),
-                TCopyInstruction(TConstant(1), v1),
+                TCopyInstruction(TConstant(1), result),
                 TJumpInstruction(end_label_name),
                 TLabelInstruction(false_label_name),
-                TCopyInstruction(TConstant(0), v1),
+                TCopyInstruction(TConstant(0), result),
                 TLabelInstruction(end_label_name),
             ])
-            return v1
+            return result
         case BinaryExpressionNode(LogicalOrOperatorNode(), exp1, exp2):
             true_label_name = get_label_name("true")
             end_label_name = get_label_name("end")
+            result = TVariable(get_temp_var_name())
             v1 = t_parse_expression(exp1, instructions)
             instructions.extend([
                 TJumpIfNotZeroInstruction(v1, true_label_name),
@@ -313,13 +315,13 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             v2 = t_parse_expression(exp2, instructions)
             instructions.extend([
                 TJumpIfNotZeroInstruction(v2, true_label_name),
-                TCopyInstruction(TConstant(0), v1),
+                TCopyInstruction(TConstant(0), result),
                 TJumpInstruction(end_label_name),
                 TLabelInstruction(true_label_name),
-                TCopyInstruction(TConstant(1), v1),
+                TCopyInstruction(TConstant(1), result),
                 TLabelInstruction(end_label_name),
             ])
-            return v1
+            return result
         case BinaryExpressionNode(op, exp1, exp2):
             v1 = t_parse_expression(exp1, instructions)
             v2 = t_parse_expression(exp2, instructions)

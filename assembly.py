@@ -183,7 +183,7 @@ class AsmDX(AsmReg):
 class AsmR11(AsmReg):
     pass
 
-class AsmCL(AsmReg):
+class AsmCX(AsmReg):
     pass
 
 
@@ -474,6 +474,10 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
             return a_func
         case AsmMov(src, dst):
             return AsmMov(tacky_fix_asm(src, offsets), tacky_fix_asm(dst, offsets))
+        case AsmSetCC(cond_code, operand):
+            return AsmSetCC(cond_code, tacky_fix_asm(operand, offsets))
+        case AsmCmp(operand1, operand2):
+            return AsmCmp(tacky_fix_asm(operand1, offsets), tacky_fix_asm(operand2, offsets))
         case AsmUnary(unop, operand):
             return AsmUnary(unop, tacky_fix_asm(operand, offsets))
         case AsmBinary(binop, op1, op2):
@@ -517,8 +521,8 @@ def tacky_fix_movs_adds_subs_cmps(node: AsmNode) -> List["AsmNode"]:
             ]
         case AsmBinary(AsmShlOp() | AsmShrOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
             return [
-                AsmMove8(op1, AsmRegister(AsmCL())),
-                AsmBinary(binop, AsmRegister(AsmCL()), op2)
+                AsmMove8(op1, AsmRegister(AsmCX())),
+                AsmBinary(binop, AsmRegister(AsmCX()), op2)
             ]
         case AsmBinary(AsmMultOp(), op1, AsmStack(_) as op2):
             return [
