@@ -57,7 +57,7 @@ class AsmInstruction(AsmNode):
     pass
 
 @dataclass
-class AsmMove(AsmInstruction):
+class AsmMov(AsmInstruction):
     src: "AsmOperand"
     dst: "AsmOperand"
 
@@ -89,11 +89,31 @@ class AsmBinary(AsmInstruction):
 class AsmIDiv(AsmInstruction):
     operand: "AsmOperand"
 
-@dataclass
 class AsmCdq(AsmInstruction):
     pass
 
+@dataclass
+class AsmCmp(AsmInstruction):
+    operand1: "AsmOperand"
+    operand2: "AsmOperand"
 
+@dataclass
+class AsmJmp(AsmInstruction):
+    target: str
+
+@dataclass
+class AsmJmpCC(AsmInstruction):
+    cond_code: "AsmCondCode"
+    target: str
+
+@dataclass
+class AsmSetCC(AsmInstruction):
+    cond_code: "AsmCondCode"
+    operand: "AsmOperand"
+
+@dataclass
+class AsmLabel(AsmInstruction):
+    name: str
 
 
 
@@ -167,9 +187,13 @@ class AsmCL(AsmReg):
     pass
 
 
+
+
+
+
 # Asm Operands
 
-class AsmOperand:
+class AsmOperand(AsmNode):
     pass
 
 @dataclass
@@ -177,7 +201,7 @@ class AsmRegister(AsmOperand):
     reg: "AsmReg"
 
 @dataclass
-class AsmImmutable(AsmOperand):
+class AsmImmediate(AsmOperand):
     value: int
 
 @dataclass
@@ -192,17 +216,40 @@ class AsmStack(AsmOperand):
 
 
 
+# Condition Codes
+
+class AsmCondCode(AsmNode):
+    pass
+
+class AsmCondCodeE(AsmCondCode):
+    pass
+
+class AsmCondCodeNE(AsmCondCode):
+    pass
+
+class AsmCondCodeG(AsmCondCode):
+    pass
+
+class AsmCondCodeGE(AsmCondCode):
+    pass
+
+class AsmCondCodeL(AsmCondCode):
+    pass
+
+class AsmCondCodeLE(AsmCondCode):
+    pass
 
 
 
-def ast_parse_factor(e: ExpressionNode) -> "AsmImmutable":
-    return AsmImmutable(e.const)
+
+def ast_parse_factor(e: ExpressionNode) -> "AsmImmediate":
+    return AsmImmediate(e.const)
 
 def ast_parse_return(s: ReturnNode) -> List["AsmInstruction"]:
     src = ast_parse_factor(s.exp)
     dst = AsmRegister()
     return [
-        AsmMove(src, dst),
+        AsmMov(src, dst),
         AsmRet()
     ]
 
@@ -219,7 +266,7 @@ def ast_parse_asm(ast: ProgramNode) -> AsmProgram:
 def tacky_parse_value(t_val: TValue) -> AsmOperand:
     match t_val:
         case TConstant(value):
-            return AsmImmutable(value)
+            return AsmImmediate(value)
         case TVariable(identifier):
             return AsmPseudo(identifier)
         case _:
@@ -260,21 +307,62 @@ def tacky_parse_binary_operator(t_binop: TBinaryOperator) -> AsmBinaryOp:
             raise SyntaxError
 
 
+def tacky_parse_relop(binop: TBinaryOperator) -> AsmCondCode:
+    match binop:
+        case TEqualOperator():
+            return AsmCondCodeE()
+        case TNotEqualOperator():
+            return AsmCondCodeNE()
+        case TLessOperator():
+            return AsmCondCodeL()
+        case TLessOrEqualOperator():
+            return AsmCondCodeLE()
+        case TGreaterOperator():
+            return AsmCondCodeG()
+        case TGreaterOrEqualOperator():
+            return AsmCondCodeGE()
+        case _:
+            raise SyntaxError
+
+
 def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
     match t_inst:
         case TReturnInstruction(val):
             a_val = tacky_parse_value(val)
             return [
-                AsmMove(a_val, AsmRegister(AsmAX())),
+                AsmMov(a_val, AsmRegister(AsmAX())),
                 AsmRet(),
+            ]
+        case TUnaryInstruction(TNotOp(), src, dst):
+            a_src = tacky_parse_value(src)
+            a_dst = tacky_parse_value(dst)
+            return [
+                AsmCmp(AsmImmediate(0), a_src),
+                AsmMov(AsmImmediate(0), a_dst),
+                AsmSetCC(AsmCondCodeE(), a_dst)
             ]
         case TUnaryInstruction(unop, src, dst):
             a_unop = tacky_parse_unary_operator(unop)
             a_src = tacky_parse_value(src)
             a_dst = tacky_parse_value(dst)
             return [
-                AsmMove(a_src, a_dst),
+                AsmMov(a_src, a_dst),
                 AsmUnary(a_unop, a_dst)
+            ]
+        case TBinaryInstruction(TEqualOperator()
+                                | TNotEqualOperator()
+                                | TLessOperator()
+                                | TLessOrEqualOperator()
+                                | TGreaterOperator()
+                                | TGreaterOrEqualOperator() as binop, src1, src2, dst):
+            a_src1 = tacky_parse_value(src1)
+            a_src2 = tacky_parse_value(src2)
+            a_dst = tacky_parse_value(dst)
+            a_binop = tacky_parse_relop(binop)
+            return [
+                AsmCmp(a_src2, a_src1),
+                AsmMov(AsmImmediate(0), a_dst),
+                AsmSetCC(a_binop, a_dst)
             ]
         case TBinaryInstruction(TAdditionOperator()
                                 | TSubtractionOperator() 
@@ -284,33 +372,59 @@ def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
                                 | TBitwiseAndOperator()
                                 | TBitwiseXorOperator()
                                 | TBitwiseOrOperator() as binop, src1, src2, dst):
-            a_binop = tacky_parse_binary_operator(binop)
+            a_relop = tacky_parse_binary_operator(binop)
             a_src1 = tacky_parse_value(src1)
             a_src2 = tacky_parse_value(src2)
             a_dst = tacky_parse_value(dst)
             return [
-                AsmMove(a_src1, a_dst),
-                AsmBinary(a_binop, a_src2, a_dst)
+                AsmMov(a_src1, a_dst),
+                AsmBinary(a_relop, a_src2, a_dst)
             ]
         case TBinaryInstruction(TDivisionOperator(), src1, src2, dst):
             a_src1 = tacky_parse_value(src1)
             a_src2 = tacky_parse_value(src2)
             a_dst = tacky_parse_value(dst)
             return [
-                AsmMove(a_src1, AsmRegister(AsmAX())),
+                AsmMov(a_src1, AsmRegister(AsmAX())),
                 AsmCdq(),
                 AsmIDiv(a_src2),
-                AsmMove(AsmRegister(AsmAX()), a_dst),
+                AsmMov(AsmRegister(AsmAX()), a_dst),
             ]
         case TBinaryInstruction(TRemainderOperator(), src1, src2, dst):
             a_src1 = tacky_parse_value(src1)
             a_src2 = tacky_parse_value(src2)
             a_dst = tacky_parse_value(dst)
             return [
-                AsmMove(a_src1, AsmRegister(AsmAX())),
+                AsmMov(a_src1, AsmRegister(AsmAX())),
                 AsmCdq(),
                 AsmIDiv(a_src2),
-                AsmMove(AsmRegister(AsmDX()), a_dst),
+                AsmMov(AsmRegister(AsmDX()), a_dst),
+            ]
+        case TCopyInstruction(src, dst):
+            a_src = tacky_parse_value(src)
+            a_dst = tacky_parse_value(dst)
+            return [
+                AsmMov(a_src, a_dst)
+            ]
+        case TJumpInstruction(target):
+            return [
+                AsmJmp(target)
+            ]
+        case TJumpIfZeroInstruction(cond, target):
+            a_cond = tacky_parse_value(cond)
+            return [
+                AsmCmp(AsmImmediate(0), a_cond),
+                AsmJmpCC(AsmCondCodeE(), target)
+            ]
+        case TJumpIfNotZeroInstruction(cond, target):
+            a_cond = tacky_parse_value(cond)
+            return [
+                AsmCmp(AsmImmediate(0), a_cond),
+                AsmJmpCC(AsmCondCodeNE(), target)
+            ]
+        case TLabelInstruction(name):
+            return [
+                AsmLabel(name)
             ]
         case _:
             raise SyntaxError
@@ -350,7 +464,7 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
 
             a_movs_fixed = []
             for a_inst in a_insts:
-                a_movs_fixed.extend(tacky_fix_movs_adds_subs(a_inst))
+                a_movs_fixed.extend(tacky_fix_movs_adds_subs_cmps(a_inst))
 
             a_divs_fixed = []
             for a_inst in a_movs_fixed:
@@ -358,15 +472,15 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
 
             a_func = AsmFunction(name, a_divs_fixed)
             return a_func
-        case AsmMove(src, dst):
-            return AsmMove(tacky_fix_asm(src, offsets), tacky_fix_asm(dst, offsets))
+        case AsmMov(src, dst):
+            return AsmMov(tacky_fix_asm(src, offsets), tacky_fix_asm(dst, offsets))
         case AsmUnary(unop, operand):
             return AsmUnary(unop, tacky_fix_asm(operand, offsets))
         case AsmBinary(binop, op1, op2):
             return AsmBinary(binop, tacky_fix_asm(op1, offsets), tacky_fix_asm(op2, offsets))
         case AsmIDiv(op):
             return AsmIDiv(tacky_fix_asm(op, offsets))
-        case AsmRegister(_) | AsmImmutable(_) | AsmCdq() | AsmRet():
+        case AsmRegister(_) | AsmImmediate(_) | AsmCdq() | AsmRet() | AsmCmp(_, _) | AsmSetCC(_, _) | AsmJmp(_) | AsmJmpCC(_, _) | AsmLabel(_):
             return node
         case AsmPseudo(identifier):
             return AsmStack(get_stack_offset(identifier, offsets))
@@ -376,21 +490,21 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
 
 def tacky_fix_idivs(node: AsmNode) -> List["AsmNode"]:
     match node:
-        case AsmIDiv(AsmImmutable(_) as op):
+        case AsmIDiv(AsmImmediate(_) as op):
             return [
-                AsmMove(op, AsmRegister(AsmR10())),
+                AsmMov(op, AsmRegister(AsmR10())),
                 AsmIDiv(AsmRegister(AsmR10())),
             ]
         case _:
             return [node]
 
 
-def tacky_fix_movs_adds_subs(node: AsmNode) -> List["AsmNode"]:
+def tacky_fix_movs_adds_subs_cmps(node: AsmNode) -> List["AsmNode"]:
     match node:
-        case AsmMove(AsmStack(_) as op1, AsmStack(_) as op2):
+        case AsmMov(AsmStack(_) as op1, AsmStack(_) as op2):
             return [
-                AsmMove(op1, AsmRegister(AsmR10())),
-                AsmMove(AsmRegister(AsmR10()), op2)
+                AsmMov(op1, AsmRegister(AsmR10())),
+                AsmMov(AsmRegister(AsmR10()), op2)
             ]
         case AsmBinary(AsmAddOp() 
                        | AsmSubOp() 
@@ -398,7 +512,7 @@ def tacky_fix_movs_adds_subs(node: AsmNode) -> List["AsmNode"]:
                        | AsmXorOp() 
                        | AsmOrOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
             return [
-                AsmMove(op1, AsmRegister(AsmR10())),
+                AsmMov(op1, AsmRegister(AsmR10())),
                 AsmBinary(binop, AsmRegister(AsmR10()), op2)
             ]
         case AsmBinary(AsmShlOp() | AsmShrOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
@@ -408,9 +522,19 @@ def tacky_fix_movs_adds_subs(node: AsmNode) -> List["AsmNode"]:
             ]
         case AsmBinary(AsmMultOp(), op1, AsmStack(_) as op2):
             return [
-                AsmMove(op2, AsmRegister(AsmR11())),
+                AsmMov(op2, AsmRegister(AsmR11())),
                 AsmBinary(AsmMultOp(), op1, AsmRegister(AsmR11())),
-                AsmMove(AsmRegister(AsmR11()), op2)
+                AsmMov(AsmRegister(AsmR11()), op2)
+            ]
+        case AsmCmp(AsmStack(_) as op1, AsmStack(_) as op2):
+            return [
+                AsmMov(op1, AsmRegister(AsmR10())),
+                AsmCmp(AsmRegister(AsmR10()), op2)
+            ]
+        case AsmCmp(op1, AsmImmediate(_) as op2):
+            return [
+                AsmMov(op2, AsmRegister(AsmR11())),
+                AsmCmp(op1, AsmRegister(AsmR11()))
             ]
         case _:
             return [node]

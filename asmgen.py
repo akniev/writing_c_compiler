@@ -18,7 +18,7 @@ def reg_to_string(reg: "AsmReg") -> str:
 
 def operand_to_string(op: AsmOperand):
     match op:
-        case AsmImmutable(value):
+        case AsmImmediate(value):
             return f"${value}"
         case AsmRegister(reg):
             return reg_to_string(reg)
@@ -56,7 +56,7 @@ def operator_to_string(operator: AsmUnaryOperator) -> str:
 
 def print_instruction(ins: AsmInstruction) -> str:
     match ins:
-        case AsmMove(src, dst):
+        case AsmMov(src, dst):
             return f"movl {operand_to_string(src)}, {operand_to_string(dst)}"
         case AsmMove8(src, dst):
             return f"movb {operand_to_string(src)}, {operand_to_string(dst)}"

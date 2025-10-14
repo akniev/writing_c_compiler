@@ -38,6 +38,7 @@ class TackyNode:
 
 
 var_counter = 0
+label_counter = 0
 
 
 @dataclass
@@ -49,6 +50,8 @@ class TProgram(TackyNode):
 class TFunction(TackyNode):
     identifier: str
     instructions: List["TInstruction"]
+
+
 
 
 
@@ -76,7 +79,28 @@ class TBinaryInstruction(TInstruction):
     src2: "TValue"
     dst: "TValue"
 
+@dataclass
+class TCopyInstruction(TInstruction):
+    src: "TValue"
+    dst: "TValue"
 
+@dataclass
+class TJumpInstruction(TInstruction):
+    target: str
+
+@dataclass
+class TJumpIfZeroInstruction(TInstruction):
+    condition: "TValue"
+    target: str
+
+@dataclass
+class TJumpIfNotZeroInstruction(TInstruction):
+    condition: "TValue"
+    target: str
+
+@dataclass
+class TLabelInstruction(TInstruction):
+    value: str
 
 
 
@@ -94,6 +118,23 @@ class TConstant(TValue):
 @dataclass
 class TVariable(TValue):
     identifier: str
+
+
+
+
+# Unary Operators
+
+class TUnaryOperator(TackyNode):
+    pass
+
+class TComplementOp(TUnaryOperator):
+    pass
+
+class TNegateOp(TUnaryOperator):
+    pass
+
+class TNotOp(TUnaryOperator):
+    pass
 
 
 
@@ -133,21 +174,22 @@ class TBitwiseXorOperator(TBinaryOperator):
 class TBitwiseOrOperator(TBinaryOperator):
     pass
 
-
-
-
-
-# Unary Operators
-
-class TUnaryOperator(TackyNode):
+class TEqualOperator(TBinaryOperator):
     pass
 
-
-class TComplementOp(TUnaryOperator):
+class TNotEqualOperator(TBinaryOperator):
     pass
 
+class TLessOperator(TBinaryOperator):
+    pass
 
-class TNegateOp(TUnaryOperator):
+class TLessOrEqualOperator(TBinaryOperator):
+    pass
+
+class TGreaterOperator(TBinaryOperator):
+    pass
+
+class TGreaterOrEqualOperator(TBinaryOperator):
     pass
 
 
@@ -177,6 +219,11 @@ def get_temp_var_name() -> str:
     var_counter += 1
     return f"tmp.{var_counter}"
 
+def get_label_name(name: str) -> str:
+    global label_counter
+    label_counter += 1
+    return f"_lbl.{name}.{label_counter}"
+
 
 def t_parse_unop(op: UnaryOperatorNode) -> TUnaryOperator:
     match op:
@@ -184,6 +231,8 @@ def t_parse_unop(op: UnaryOperatorNode) -> TUnaryOperator:
             return TComplementOp()
         case NegateOperatorNode():
             return TNegateOp()
+        case NotOperatorNode():
+            return TNotOp()
         case _:
             raise SyntaxError
 
@@ -210,6 +259,18 @@ def t_parse_binop(op: BinaryOperatorNode) -> TBinaryOperator:
             return TBitwiseXorOperator()
         case BitwiseOrOperatorNode():
             return TBitwiseOrOperator()
+        case EqualOperatorNode():
+            return TEqualOperator()
+        case NotEqualOperatorNode():
+            return TNotEqualOperator()
+        case LessThanOperatorNode():
+            return TLessOperator()
+        case LessOrEqualOperatorNode():
+            return TLessOrEqualOperator()
+        case GreaterThanOperatorNode():
+            return TGreaterOperator()
+        case GreaterOrEqualOperatorNode():
+            return TGreaterOrEqualOperator()
         case _:
             raise SyntaxError
 
@@ -225,6 +286,40 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             t_op = t_parse_unop(op)
             instructions.append(TUnaryInstruction(t_op, src, dst))
             return dst
+        case BinaryExpressionNode(LogicalAndOperatorNode(), exp1, exp2):
+            false_label_name = get_label_name("false")
+            end_label_name = get_label_name("end")
+            v1 = t_parse_expression(exp1, instructions)
+            instructions.extend([
+                TJumpIfZeroInstruction(v1, false_label_name),
+            ])
+            v2 = t_parse_expression(exp2, instructions)
+            instructions.extend([
+                TJumpIfZeroInstruction(v2, false_label_name),
+                TCopyInstruction(TConstant(1), v1),
+                TJumpInstruction(end_label_name),
+                TLabelInstruction(false_label_name),
+                TCopyInstruction(TConstant(0), v1),
+                TLabelInstruction(end_label_name),
+            ])
+            return v1
+        case BinaryExpressionNode(LogicalOrOperatorNode(), exp1, exp2):
+            true_label_name = get_label_name("true")
+            end_label_name = get_label_name("end")
+            v1 = t_parse_expression(exp1, instructions)
+            instructions.extend([
+                TJumpIfNotZeroInstruction(v1, true_label_name),
+            ])
+            v2 = t_parse_expression(exp2, instructions)
+            instructions.extend([
+                TJumpIfNotZeroInstruction(v2, true_label_name),
+                TCopyInstruction(TConstant(0), v1),
+                TJumpInstruction(end_label_name),
+                TLabelInstruction(true_label_name),
+                TCopyInstruction(TConstant(1), v1),
+                TLabelInstruction(end_label_name),
+            ])
+            return v1
         case BinaryExpressionNode(op, exp1, exp2):
             v1 = t_parse_expression(exp1, instructions)
             v2 = t_parse_expression(exp2, instructions)
