@@ -245,7 +245,7 @@ class AsmCondCodeLE(AsmCondCode):
 def ast_parse_factor(e: ExpressionNode) -> "AsmImmediate":
     return AsmImmediate(e.const)
 
-def ast_parse_return(s: ReturnNode) -> List["AsmInstruction"]:
+def ast_parse_return(s: ReturnStatementNode) -> List["AsmInstruction"]:
     src = ast_parse_factor(s.exp)
     dst = AsmRegister()
     return [

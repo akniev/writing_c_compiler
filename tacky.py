@@ -206,7 +206,7 @@ def t_parse_function(fnode: FunctionNode) -> TFunction:
 
 def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
     match fstatement:
-        case ReturnNode(exp):
+        case ReturnStatementNode(exp):
             instructions = []
             var = t_parse_expression(exp, instructions)
             return instructions + [TReturnInstruction(var)]

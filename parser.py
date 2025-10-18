@@ -20,6 +20,7 @@ BINARY_OP_TOKENS = [
     LessOrEqual,
     GreaterThan,
     GreaterOrEqual,
+    EqualSign,
 ]
 
 BINARY_OP_PRECENDENCE_MAP = {
@@ -41,6 +42,7 @@ BINARY_OP_PRECENDENCE_MAP = {
     Pipe: 25,                   # |
     TwoAmbersands: 20,          # &&
     TwoPipes: 15,               # ||
+    EqualSign: 1,               # =
 }
 
 def precedence(token: "Token") -> int:
@@ -82,7 +84,8 @@ class AstNode:
 
         print(indent_str + ")")
 
-        
+
+# Top level        
 
 @dataclass
 class ProgramNode(AstNode):
@@ -91,16 +94,47 @@ class ProgramNode(AstNode):
 @dataclass
 class FunctionNode(AstNode):
     name: str
-    body: "StatementNode"
+    body: List["BlockItemNode"]
+
+@dataclass
+class DeclarationNode(AstNode):
+    name: str
+    init: Optional["ExpressionNode"]
+
+
+
+
+# Block items
+
+class BlockItemNode(AstNode):
+    pass
+
+@dataclass
+class StatementBlockItemNode(BlockItemNode):
+    statement: "StatementNode"
+
+@dataclass
+class DeclarationBlockItemNode(BlockItemNode):
+    declaration: "DeclarationNode"
+
+
+
+
+# Statements
 
 class StatementNode(AstNode):
     pass
 
 @dataclass
-class ReturnNode(StatementNode):
+class ReturnStatementNode(StatementNode):
     exp: "ExpressionNode"
 
+@dataclass
+class ExpressionStatementNode(StatementNode):
+    exp: "ExpressionNode"
 
+class NullStatementNode(StatementNode):
+    pass
 
 
 # Unary Operators
@@ -116,6 +150,8 @@ class NegateOperatorNode(UnaryOperatorNode):
 
 class NotOperatorNode(UnaryOperatorNode):
     pass
+
+
 
 
 # Binary Operators
@@ -177,6 +213,9 @@ class LessOrEqualOperatorNode(BinaryOperatorNode):
 class GreaterOrEqualOperatorNode(BinaryOperatorNode):
     pass
 
+class AssignmentOperatorNode(BinaryOperatorNode):
+    pass
+
 
 
 # Expressions
@@ -198,6 +237,16 @@ class BinaryExpressionNode(ExpressionNode):
     binary_op: "BinaryOperatorNode"
     exp1: "ExpressionNode"
     exp2: "ExpressionNode"
+
+@dataclass
+class VariableExpressionNode(ExpressionNode):
+    name: str
+
+@dataclass
+class AssignmentExpressionNode(ExpressionNode):
+    lhs: "ExpressionNode"
+    rhs: "ExpressionNode"
+
 
 
 
@@ -234,7 +283,7 @@ def get_unary_operator(token):
         case _:
             raise SyntaxError
 
-def parse_unary_expression(tokens: List["Token"]) -> UnaryOperatorNode:
+def ast_parse_unary_expression(tokens: List["Token"]) -> UnaryOperatorNode:
     token = take_token(tokens)
     if not is_unary(token):
         raise SyntaxError
@@ -287,22 +336,31 @@ def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
     left = ast_parse_factor(tokens)
     next_token = peek(tokens)
     while type(next_token) in BINARY_OP_TOKENS and precedence(next_token) >= min_prec:
-        operator = ast_parse_binop(tokens)
-        right = ast_parse_exp(tokens, precedence(next_token) + 1)
-        left = BinaryExpressionNode(operator, left, right)
+        if isinstance(next_token, EqualSign):
+            take_token(tokens)
+            right = ast_parse_exp(tokens, precedence(next_token))
+            left = AssignmentExpressionNode(left, right)
+        else:
+            operator = ast_parse_binop(tokens)
+            right = ast_parse_exp(tokens, precedence(next_token) + 1)
+            left = BinaryExpressionNode(operator, left, right)
         next_token = peek(tokens)
     return left
 
 def ast_parse_factor(tokens: List["Token"]) -> "ExpressionNode":
-    token = tokens[0] if tokens else None
+    token = peek(tokens)
     if token is None:
         raise SyntaxError("Unexpected end of file")
 
     if isinstance(token, Constant):
         s_const: "Constant" = expect_and_take(Constant, tokens)
         return ConstantExpressionNode(s_const.value)
+    elif isinstance(token, Identifier):
+        t: Identifier = token
+        take_token(tokens)
+        return VariableExpressionNode(t.name)
     elif is_unary(token):
-        return parse_unary_expression(tokens)
+        return ast_parse_unary_expression(tokens)
     elif isinstance(token, OpenParenthesis):
         expect_and_take(OpenParenthesis, tokens)
         exp = ast_parse_exp(tokens, 0)
@@ -312,14 +370,43 @@ def ast_parse_factor(tokens: List["Token"]) -> "ExpressionNode":
         raise SyntaxError("Unexpected symbol")
 
 
-def parse_statement(tokens: List["Token"]) -> "StatementNode":
+def ast_parse_block_item(tokens: List["Token"]) -> "BlockItemNode":
+    match peek(tokens):
+        # Declaration
+        case Identifier("int", True): 
+            return ast_parse_declaration(tokens)
+        # Statement
+        case _:
+            return ast_parse_statement(tokens)
+
+def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationBlockItemNode":
+    decl_type: Identifier = expect_and_take(Identifier, tokens)
+    if (not decl_type.is_keyword) or (decl_type.name != "int"):
+        raise SyntaxError
+    decl_identifier: Identifier = expect_and_take(Identifier, tokens)
+    t = peek(tokens)
+    if isinstance(t, Semicolon):
+        decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier))
+        expect_and_take(Semicolon, tokens)
+        return decl
+    expect_and_take(EqualSign, tokens)
+    exp = ast_parse_exp(tokens, 0)
+    decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier.name, exp))
+    expect_and_take(Semicolon, tokens)
+    return decl
+
+def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
     match tokens[0]:
+        case Semicolon():
+            return StatementBlockItemNode(NullStatementNode())
         case Identifier("return", True):
             return ast_parse_return(tokens)
         case _:
-            raise SyntaxError
+            exp = ast_parse_exp(tokens, 0)
+            expect_and_take(Semicolon, tokens)
+            return exp
 
-def ast_parse_return(tokens: List["Token"]) -> "ReturnNode":
+def ast_parse_return(tokens: List["Token"]) -> "ReturnStatementNode":
     s_ret: Identifier = expect_and_take(Identifier, tokens)
     if not s_ret.is_keyword:
         raise SyntaxError
@@ -330,7 +417,7 @@ def ast_parse_return(tokens: List["Token"]) -> "ReturnNode":
 
     expect_and_take(Semicolon, tokens)
 
-    return ReturnNode(s_exp)
+    return ReturnStatementNode(s_exp)
 
 
 def ast_parse_function(tokens: List["Token"]) -> "FunctionNode":
@@ -357,7 +444,11 @@ def ast_parse_function(tokens: List["Token"]) -> "FunctionNode":
 
     expect_and_take(OpenBrace, tokens)
 
-    f_statement = parse_statement(tokens)
+    f_statements = []
+    
+    while not isinstance(peek(tokens), CloseBrace):
+        f_statement = ast_parse_block_item(tokens)
+        f_statements.append(f_statement)
 
     expect_and_take(CloseBrace, tokens)
 

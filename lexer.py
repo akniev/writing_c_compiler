@@ -228,6 +228,13 @@ class GreaterOrEqual(Token):
     @classmethod
     def from_match(cls, m):
         return cls()
+    
+class EqualSign(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
 
 TOKENS: List["Token"] = [
     Identifier, 
@@ -259,7 +266,8 @@ TOKENS: List["Token"] = [
     LessThan,
     GreaterThan,
     LessOrEqual,
-    GreaterOrEqual
+    GreaterOrEqual,
+    EqualSign
 ]
 WHITESPACE = re.compile(r"\s*")
 
