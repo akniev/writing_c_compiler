@@ -403,11 +403,12 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
             take_token(tokens)
             return StatementBlockItemNode(NullStatementNode())
         case Identifier("return", True):
-            return ast_parse_return(tokens)
+            r_statement = ast_parse_return(tokens)
+            return StatementBlockItemNode(r_statement)
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)
-            return exp
+            return StatementBlockItemNode(ExpressionStatementNode(exp))
 
 def ast_parse_return(tokens: List["Token"]) -> "ReturnStatementNode":
     s_ret: Identifier = expect_and_take(Identifier, tokens)

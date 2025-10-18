@@ -37,7 +37,7 @@ def resolve_variables(node: AstNode, variable_map: Dict[str, str]) -> AstNode:
         case ReturnStatementNode(exp):
             return ReturnStatementNode(resolve_variables(exp, variable_map))
         case ExpressionStatementNode(exp):
-            return ReturnStatementNode(resolve_variables(exp, variable_map))
+            return ExpressionStatementNode(resolve_variables(exp, variable_map))
         
         # Expressions
         case ConstantExpressionNode(_):

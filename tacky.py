@@ -200,8 +200,42 @@ def t_parse_program(pnode: ProgramNode) -> TProgram:
 
 def t_parse_function(fnode: FunctionNode) -> TFunction:
     fname = fnode.name
-    finstructions = t_parse_statement(fnode.body)
+    finstructions = t_parse_block_items(fnode.body)
+    finstructions.append(TReturnInstruction(TConstant(0)))
     return TFunction(fname, finstructions)
+
+def t_parse_block_item(b_item: "BlockItemNode") -> List["TInstruction"]:
+    match b_item:
+        case StatementBlockItemNode(s_node):
+            return t_parse_statement(s_node)
+        case DeclarationBlockItemNode(d_node):
+            return t_parse_declaration(d_node)
+
+
+def t_parse_declaration(d_node: DeclarationNode) -> List["TInstruction"]:
+    instructions = []
+    if d_node.init is None:
+        return []
+    t_parse_assignment(d_node.name, d_node.init, instructions)
+    return instructions
+
+
+def t_parse_assignment(vname: str, rhs: "ExpressionNode", instructions: List["TInstruction"]) -> "TValue":
+    result = t_parse_expression(rhs, instructions)
+    lhs = TVariable(vname)
+    instructions.append(TCopyInstruction(result, lhs))
+    return result
+
+
+
+def t_parse_block_items(b_items: List["BlockItemNode"]) -> List["TInstruction"]:
+    instructions = []
+
+    for b_item in b_items:
+        insts = t_parse_block_item(b_item)
+        instructions.extend(insts)
+
+    return instructions
 
 
 def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
@@ -210,6 +244,12 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             instructions = []
             var = t_parse_expression(exp, instructions)
             return instructions + [TReturnInstruction(var)]
+        case ExpressionStatementNode(exp):
+            instructions = []
+            var = t_parse_expression(exp, instructions)
+            return instructions
+        case NullStatementNode():
+            return []
         case _:
             raise SyntaxError
 
@@ -330,5 +370,9 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             t_op = t_parse_binop(op)
             instructions.append(TBinaryInstruction(t_op, v1, v2, dst))
             return dst
+        case VariableExpressionNode(name):
+            return TVariable(name)
+        case AssignmentExpressionNode(VariableExpressionNode(name), rhs):
+            return t_parse_assignment(name, rhs, instructions)
         case _:
             raise SyntaxError
