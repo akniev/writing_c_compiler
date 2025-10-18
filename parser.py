@@ -357,6 +357,8 @@ def ast_parse_factor(tokens: List["Token"]) -> "ExpressionNode":
         return ConstantExpressionNode(s_const.value)
     elif isinstance(token, Identifier):
         t: Identifier = token
+        if t.is_keyword:
+            raise SyntaxError
         take_token(tokens)
         return VariableExpressionNode(t.name)
     elif is_unary(token):
@@ -386,7 +388,7 @@ def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationBlockItemNode":
     decl_identifier: Identifier = expect_and_take(Identifier, tokens)
     t = peek(tokens)
     if isinstance(t, Semicolon):
-        decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier))
+        decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier.name, None))
         expect_and_take(Semicolon, tokens)
         return decl
     expect_and_take(EqualSign, tokens)
@@ -396,8 +398,9 @@ def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationBlockItemNode":
     return decl
 
 def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
-    match tokens[0]:
+    match peek(tokens):
         case Semicolon():
+            take_token(tokens)
             return StatementBlockItemNode(NullStatementNode())
         case Identifier("return", True):
             return ast_parse_return(tokens)
@@ -452,7 +455,7 @@ def ast_parse_function(tokens: List["Token"]) -> "FunctionNode":
 
     expect_and_take(CloseBrace, tokens)
 
-    return FunctionNode(f_name.name, f_statement)
+    return FunctionNode(f_name.name, f_statements)
 
 
 def parse_program(tokens: List["Token"]) -> "ProgramNode":
@@ -461,7 +464,8 @@ def parse_program(tokens: List["Token"]) -> "ProgramNode":
     if len(tokens) > 0:
         raise SyntaxError
 
-    return ProgramNode(func)
+    p_node = ProgramNode(func)
+    return p_node
 
 def parse(tokens: List["Token"]) -> "ProgramNode":
     return parse_program(tokens)

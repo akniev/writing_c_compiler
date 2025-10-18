@@ -214,10 +214,10 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             raise SyntaxError
 
 
-def get_temp_var_name() -> str:
+def get_temp_var_name(prefix="tmp") -> str:
     global var_counter
     var_counter += 1
-    return f"tmp.{var_counter}"
+    return f"{prefix}.{var_counter}"
 
 def get_label_name(name: str) -> str:
     global label_counter

@@ -10,6 +10,7 @@ from parser import *
 from assembly import *
 from tacky import *
 from asmgen import *
+from validator import *
 import subprocess
 
 
@@ -18,6 +19,7 @@ def parse_args():
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--lex", action="store_true", help="Run lexer stage only")
     group.add_argument("--parse", action="store_true", help="Run parser stage only")
+    group.add_argument("--validate", action="store_true", help="Run validation generation stage only")
     group.add_argument("--codegen", action="store_true", help="Run code generation stage only")
     group.add_argument("--tacky", action="store_true", help="Run TACKY generation stage only")
 
@@ -50,10 +52,19 @@ def main(argv):
         ast.pretty_print()
         return 0
     
+    if args.validate:
+        tokens = get_tokens(text)
+        ast = parse(tokens)
+        v_ast = validate(ast)
+
+        v_ast.pretty_print()
+        return 0
+    
     if args.codegen:
         tokens = get_tokens(text)
         ast = parse(tokens)
-        tacky_ast = t_parse_program(ast)
+        v_ast = validate(ast)
+        tacky_ast = t_parse_program(v_ast)
         asm_ast = tacky_parse_program(tacky_ast)
         asm_ast.pretty_print()
         return 0
@@ -61,17 +72,19 @@ def main(argv):
     if args.tacky:
         tokens = get_tokens(text)
         ast = parse(tokens)
-        tacky_ast = t_parse_program(ast)
+        v_ast = validate(ast)
+        tacky_ast = t_parse_program(v_ast)
         tacky_ast.pretty_print()
         return 0
 
     print("===PARSER==")
     tokens = get_tokens(text)
     ast = parse(tokens)
-    ast.pretty_print()
+    v_ast = validate(ast)
+    v_ast.pretty_print()
     
     print("===TACKY===")
-    tacky_ast = t_parse_program(ast)
+    tacky_ast = t_parse_program(v_ast)
     tacky_ast.pretty_print()
     
     print("====ASM====")
