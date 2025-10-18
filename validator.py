@@ -61,6 +61,14 @@ def resolve_variables(node: AstNode, variable_map: Dict[str, str]) -> AstNode:
                 resolve_variables(lhs, variable_map),
                 resolve_variables(rhs, variable_map)
             )
+        case CompoundAssignmentExpressionNode(binop, lhs, rhs):
+            if not isinstance(lhs, VariableExpressionNode):
+                raise SyntaxError("Invalid lvalue!")
+            return CompoundAssignmentExpressionNode(
+                binop,
+                resolve_variables(lhs, variable_map),
+                resolve_variables(rhs, variable_map)
+            )
         case _:
             raise SyntaxError("Unknown AST node!")
 

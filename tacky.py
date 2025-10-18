@@ -226,7 +226,21 @@ def t_parse_assignment(vname: str, rhs: "ExpressionNode", instructions: List["TI
     instructions.append(TCopyInstruction(result, lhs))
     return result
 
-
+def t_parse_compound_assignment(
+        binop: BinaryOperatorNode, 
+        lhs: "ExpressionNode",
+        rhs: "ExpressionNode", 
+        instructions: List["TInstruction"]) -> "TValue":
+    match lhs:
+        case VariableExpressionNode(name):
+            exp = BinaryExpressionNode(binop, lhs, rhs)
+            result = t_parse_expression(exp, instructions)
+            t_lhs = TVariable(name)
+            instructions.append(TCopyInstruction(result, t_lhs))
+            return result
+        case _:
+            raise SyntaxError("Wrong lvalue type!")
+    
 
 def t_parse_block_items(b_items: List["BlockItemNode"]) -> List["TInstruction"]:
     instructions = []
@@ -374,5 +388,7 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             return TVariable(name)
         case AssignmentExpressionNode(VariableExpressionNode(name), rhs):
             return t_parse_assignment(name, rhs, instructions)
+        case CompoundAssignmentExpressionNode(binop, lhs, rhs):
+            return t_parse_compound_assignment(binop, lhs, rhs, instructions)
         case _:
             raise SyntaxError

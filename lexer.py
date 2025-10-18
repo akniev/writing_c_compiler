@@ -235,6 +235,101 @@ class EqualSign(Token):
     @classmethod
     def from_match(cls, m):
         return cls()
+    
+# Compound Arithmetic Assignments
+
+class PlusEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\+=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+class MinusEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"-=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class AsteriskEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\*=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class ForwardSlashEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"/=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class PercentEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"%=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+# Compound Logical Assignments
+
+class AmpersandEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"&=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class PipeEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\|=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class CaretEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\^=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class LeftShiftEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"<<=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class RightShiftEqual(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r">>=")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+
+# Increment and Decrement
+
+class TwoPlusses(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\+\+")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
+
+class TwoMinuses(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"--")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+
+
 
 TOKENS: List["Token"] = [
     Identifier, 
@@ -267,7 +362,19 @@ TOKENS: List["Token"] = [
     GreaterThan,
     LessOrEqual,
     GreaterOrEqual,
-    EqualSign
+    EqualSign,
+    PlusEqual,
+    MinusEqual,
+    AsteriskEqual,
+    ForwardSlashEqual,
+    PercentEqual,
+    AmpersandEqual,
+    PipeEqual,
+    CaretEqual,
+    LeftShiftEqual,
+    RightShiftEqual,
+    # TwoPlusses,
+    # TwoMinuses,
 ]
 WHITESPACE = re.compile(r"\s*")
 

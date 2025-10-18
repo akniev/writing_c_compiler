@@ -7,13 +7,16 @@ BINARY_OP_TOKENS = [
     PercentSign,
     PlusSign, 
     Hyphen, 
+    
     Ampersand, 
     Caret, 
     Pipe, 
     LeftShift, 
     RightShift,
+    
     TwoAmbersands,
     TwoPipes,
+    
     TwoEqualSigns,
     ExclamationEqualSign,
     LessThan,
@@ -21,6 +24,31 @@ BINARY_OP_TOKENS = [
     GreaterThan,
     GreaterOrEqual,
     EqualSign,
+    
+    PlusEqual,
+    MinusEqual,
+    AsteriskEqual,
+    ForwardSlashEqual,
+    PercentEqual,
+
+    AmpersandEqual,
+    PipeEqual,
+    CaretEqual,
+    LeftShiftEqual,
+    RightShiftEqual,
+]
+
+COMPOUND_ASSIGNMENT_TOKENS = [
+    PlusEqual,
+    MinusEqual,
+    AsteriskEqual,
+    ForwardSlashEqual,
+    PercentEqual,
+    AmpersandEqual,
+    PipeEqual,
+    CaretEqual,
+    LeftShiftEqual,
+    RightShiftEqual,
 ]
 
 BINARY_OP_PRECENDENCE_MAP = {
@@ -43,6 +71,16 @@ BINARY_OP_PRECENDENCE_MAP = {
     TwoAmbersands: 20,          # &&
     TwoPipes: 15,               # ||
     EqualSign: 1,               # =
+    PlusEqual: 1,               # +=
+    MinusEqual: 1,              # -=
+    AsteriskEqual: 1,           # *=
+    ForwardSlashEqual: 1,       # /=
+    PercentEqual: 1,            # %=
+    AmpersandEqual: 1,          # &=
+    PipeEqual: 1,               # |=
+    CaretEqual: 1,              # ^=
+    LeftShiftEqual: 1,          # <<=
+    RightShiftEqual: 1,         # >>=
 }
 
 def precedence(token: "Token") -> int:
@@ -217,6 +255,39 @@ class AssignmentOperatorNode(BinaryOperatorNode):
     pass
 
 
+# # Compound Assignment Operators
+
+# class PlusCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class MinusCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class MultiplyCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class DivideCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class RemainderCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class ArithmeticAndEqualCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class ArithmeticOrCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class ArithmeticXorCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class LeftShiftCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+# class RightShiftCompoundAssignmentOperator(BinaryOperatorNode):
+#     pass
+
+
 
 # Expressions
 
@@ -244,6 +315,12 @@ class VariableExpressionNode(ExpressionNode):
 
 @dataclass
 class AssignmentExpressionNode(ExpressionNode):
+    lhs: "ExpressionNode"
+    rhs: "ExpressionNode"
+
+@dataclass
+class CompoundAssignmentExpressionNode(ExpressionNode):
+    binary_op: "BinaryOperatorNode"
     lhs: "ExpressionNode"
     rhs: "ExpressionNode"
 
@@ -332,6 +409,31 @@ def ast_parse_binop(tokens: List["Token"]) -> BinaryOperatorNode:
         case _:
             SyntaxError
 
+def ast_parse_compop(token: Token) -> BinaryOperatorNode:
+    match token:
+        case PlusEqual():
+            return AddOperatorNode()
+        case MinusEqual():
+            return SubtractOperatorNode()
+        case AsteriskEqual():
+            return MultiplyOperatorNode()
+        case ForwardSlashEqual():
+            return DivideOperatorNode()
+        case PercentEqual():
+            return RemainderOperatorNode()
+        case AmpersandEqual():
+            return BitwiseAndOpeatorNode()
+        case PipeEqual():
+            return BitwiseOrOperatorNode()
+        case CaretEqual():
+            return BitwiseXorOperatorNode()
+        case LeftShiftEqual():
+            return LeftShiftOperatorNode()
+        case RightShiftEqual():
+            return RightShiftOperatorNode()
+        case _:
+            raise SyntaxError("Unknown compound assignment operator!")
+
 def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
     left = ast_parse_factor(tokens)
     next_token = peek(tokens)
@@ -340,6 +442,11 @@ def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
             take_token(tokens)
             right = ast_parse_exp(tokens, precedence(next_token))
             left = AssignmentExpressionNode(left, right)
+        elif type(next_token) in COMPOUND_ASSIGNMENT_TOKENS:
+            t = take_token(tokens)
+            operator = ast_parse_compop(t)
+            right = ast_parse_exp(tokens, precedence(next_token))
+            left = CompoundAssignmentExpressionNode(operator, left, right)
         else:
             operator = ast_parse_binop(tokens)
             right = ast_parse_exp(tokens, precedence(next_token) + 1)
