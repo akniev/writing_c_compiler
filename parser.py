@@ -580,7 +580,7 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
             return StatementBlockItemNode(LabeledStatement(name))
         case OpenBrace():
             block = ast_parse_block(tokens)
-            return CompoundStatement(block)
+            return StatementBlockItemNode(CompoundStatement(block))
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)
@@ -654,15 +654,6 @@ def ast_parse_function(tokens: List["Token"]) -> "FunctionNode":
     
     expect_and_take(CloseParenthesis, tokens)
 
-    # expect_and_take(OpenBrace, tokens)
-
-    # f_statements = []
-    
-    # while not isinstance(peek(tokens), CloseBrace):
-    #     f_statement = ast_parse_block_item(tokens)
-    #     f_statements.append(f_statement)
-
-    # expect_and_take(CloseBrace, tokens)
     f_body = ast_parse_block(tokens)
 
     return FunctionNode(f_name.name, f_body)

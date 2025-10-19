@@ -25,7 +25,7 @@ def resolve_variables(node: AstNode, block_id: int, variable_map: Dict[str, str]
             block_items_resolved = []
             for bi in block_items:
                 block_items_resolved.append(resolve_variables(bi, block_id, variable_map))
-            f_node = FunctionNode(name, block_items_resolved)
+            f_node = FunctionNode(name, BlockNode(block_items_resolved))
             return f_node
         case DeclarationNode(name, exp):
             if name in variable_map and variable_map[name][1] == block_id:
@@ -119,12 +119,13 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
             f_node_resolved = resolve_labels(f_node, update_goto, func_prefix, label_map)
             p_node = ProgramNode(f_node_resolved)
             return p_node
-        case FunctionNode(name, BlockNode(block_items)):
+        case FunctionNode(name, block):
+            return FunctionNode(name, resolve_labels(block, update_goto, func_prefix, label_map))
+        case BlockNode(block_items):
             block_items_resolved = []
             for bi in block_items:
                 block_items_resolved.append(resolve_labels(bi, update_goto, func_prefix, label_map))
-            f_node = FunctionNode(name, block_items_resolved)
-            return f_node
+            return BlockNode(block_items_resolved)
         
         # Block item nodes
         case StatementBlockItemNode(statement):
@@ -152,6 +153,8 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
             new_name = get_label_name(fname)
             label_map[fname] = new_name
             return LabeledStatement(new_name)
+        case CompoundStatement(block):
+            return CompoundStatement(resolve_labels(block, update_goto, func_prefix, label_map))
         case _:
             return node
 
@@ -159,7 +162,9 @@ def check_labels_have_statements(node: AstNode):
     match node:
         case ProgramNode(function):
             return check_labels_have_statements(function)
-        case FunctionNode(_, block_items):
+        case FunctionNode(_, block):
+            return check_labels_have_statements(block)
+        case BlockNode(block_items):
             for i in range(len(block_items)):
                 block_item = block_items[i]
                 next_block_item = block_items[i + 1] if i < len(block_items) - 1 else None
@@ -168,6 +173,8 @@ def check_labels_have_statements(node: AstNode):
                         raise SyntaxError("No statements are labeled")
                     case StatementBlockItemNode(LabeledStatement(_)), DeclarationBlockItemNode(_):
                         raise SyntaxError("no labels for declarations")
+                    case StatementBlockItemNode(CompoundStatement(block)), _:
+                        check_labels_have_statements(block)
                     case _:
                         pass
         case _:

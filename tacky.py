@@ -206,7 +206,7 @@ def t_parse_program(pnode: ProgramNode) -> TProgram:
 
 def t_parse_function(fnode: FunctionNode) -> TFunction:
     fname = fnode.name
-    finstructions = t_parse_block_items(fnode.body)
+    finstructions = t_parse_block_items(fnode.body.items)
     finstructions.append(TReturnInstruction(TConstant(0)))
     return TFunction(fname, finstructions)
 
@@ -376,6 +376,8 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             return [
                 TLabelInstruction(name)
             ]
+        case CompoundStatement(BlockNode(items)):
+            return t_parse_block_items(items)
         case NullStatementNode():
             return []
         case _:
