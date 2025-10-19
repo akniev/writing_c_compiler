@@ -38,6 +38,12 @@ def resolve_variables(node: AstNode, variable_map: Dict[str, str]) -> AstNode:
             return ReturnStatementNode(resolve_variables(exp, variable_map))
         case ExpressionStatementNode(exp):
             return ExpressionStatementNode(resolve_variables(exp, variable_map))
+        case IfStatementNode(cond, then_exp, else_exp):
+            return IfStatementNode(
+                resolve_variables(cond, variable_map),
+                resolve_variables(then_exp, variable_map),
+                resolve_variables(else_exp, variable_map)
+            )
         
         # Expressions
         case ConstantExpressionNode(_):
@@ -72,6 +78,12 @@ def resolve_variables(node: AstNode, variable_map: Dict[str, str]) -> AstNode:
                 binop,
                 resolve_variables(lhs, variable_map),
                 resolve_variables(rhs, variable_map)
+            )
+        case ConditionalExpressionNode(cond, true_exp, false_exp):
+            return ConditionalExpressionNode(
+                resolve_variables(cond, variable_map),
+                resolve_variables(true_exp, variable_map),
+                resolve_variables(false_exp, variable_map)
             )
         case _:
             raise SyntaxError("Unknown AST node!")
