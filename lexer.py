@@ -3,7 +3,7 @@ from typing import *
 import re
 
 
-KEYWORDS = set(["int", "void", "return"])
+KEYWORDS = set(["int", "void", "return", "if", "else"])
 
 class Token:
     pattern: ClassVar[Pattern[str]]
@@ -229,6 +229,22 @@ class EqualSign(Token):
     def from_match(cls, m):
         return cls()
     
+# Conditional expressions
+
+class QuestionMark(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\?")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
+class Colon(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r":")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+    
 # Compound Arithmetic Assignments
 
 class PlusEqual(Token):
@@ -367,6 +383,8 @@ TOKENS: List["Token"] = [
     RightShiftEqual,
     TwoPlusses,
     TwoMinuses,
+    QuestionMark,
+    Colon,
 ]
 WHITESPACE = re.compile(r"\s*")
 
