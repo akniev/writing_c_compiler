@@ -142,7 +142,7 @@ class ProgramNode(AstNode):
 @dataclass
 class FunctionNode(AstNode):
     name: str
-    body: List["BlockItemNode"]
+    body: "BlockNode"
 
 @dataclass
 class DeclarationNode(AstNode):
@@ -153,6 +153,10 @@ class DeclarationNode(AstNode):
 
 
 # Block items
+
+@dataclass
+class BlockNode(AstNode):
+    items: List["BlockItemNode"]
 
 class BlockItemNode(AstNode):
     pass
@@ -194,6 +198,10 @@ class LabeledStatement(StatementNode):
 @dataclass
 class GotoStatement(StatementNode):
     label: str
+
+@dataclass
+class CompoundStatement(StatementNode):
+    block: "BlockNode"
 
 class NullStatementNode(StatementNode):
     pass
@@ -570,6 +578,9 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
             expect_and_take(Identifier, tokens)
             expect_and_take(Colon, tokens)
             return StatementBlockItemNode(LabeledStatement(name))
+        case OpenBrace():
+            block = ast_parse_block(tokens)
+            return CompoundStatement(block)
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)
@@ -608,6 +619,19 @@ def ast_parse_return(tokens: List["Token"]) -> "ReturnStatementNode":
     return ReturnStatementNode(s_exp)
 
 
+def ast_parse_block(tokens: List["Token"]) -> "BlockNode":
+    expect_and_take(OpenBrace, tokens)
+
+    block_items = []
+    while not isinstance(peek(tokens), CloseBrace):
+        b_item = ast_parse_block_item(tokens)
+        block_items.append(b_item)
+
+    expect_and_take(CloseBrace, tokens)
+
+    return BlockNode(block_items)
+
+
 def ast_parse_function(tokens: List["Token"]) -> "FunctionNode":
     expect(Identifier, tokens)
     f_type: "Identifier" = take_token(tokens)
@@ -630,17 +654,18 @@ def ast_parse_function(tokens: List["Token"]) -> "FunctionNode":
     
     expect_and_take(CloseParenthesis, tokens)
 
-    expect_and_take(OpenBrace, tokens)
+    # expect_and_take(OpenBrace, tokens)
 
-    f_statements = []
+    # f_statements = []
     
-    while not isinstance(peek(tokens), CloseBrace):
-        f_statement = ast_parse_block_item(tokens)
-        f_statements.append(f_statement)
+    # while not isinstance(peek(tokens), CloseBrace):
+    #     f_statement = ast_parse_block_item(tokens)
+    #     f_statements.append(f_statement)
 
-    expect_and_take(CloseBrace, tokens)
+    # expect_and_take(CloseBrace, tokens)
+    f_body = ast_parse_block(tokens)
 
-    return FunctionNode(f_name.name, f_statements)
+    return FunctionNode(f_name.name, f_body)
 
 
 def parse_program(tokens: List["Token"]) -> "ProgramNode":
