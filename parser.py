@@ -36,6 +36,8 @@ BINARY_OP_TOKENS = [
     CaretEqual,
     LeftShiftEqual,
     RightShiftEqual,
+
+    QuestionMark,
 ]
 
 INC_DEC_TOKENS = [
@@ -77,6 +79,7 @@ BINARY_OP_PRECENDENCE_MAP = {
     Pipe: 25,                   # |
     TwoAmbersands: 20,          # &&
     TwoPipes: 15,               # ||
+    QuestionMark: 10,           # ?
     EqualSign: 1,               # =
     PlusEqual: 1,               # +=
     MinusEqual: 1,              # -=
@@ -178,6 +181,12 @@ class ReturnStatementNode(StatementNode):
 class ExpressionStatementNode(StatementNode):
     exp: "ExpressionNode"
 
+@dataclass
+class IfStatementNode(StatementNode):
+    cond: "ExpressionNode"
+    then_exp: "ExpressionNode"
+    else_exp: Optional["ExpressionNode"]
+
 class NullStatementNode(StatementNode):
     pass
 
@@ -271,7 +280,6 @@ class AssignmentOperatorNode(BinaryOperatorNode):
     pass
 
 
-
 # Expressions
 
 class ExpressionNode(AstNode):
@@ -316,6 +324,12 @@ class CompoundAssignmentExpressionNode(ExpressionNode):
     binary_op: "BinaryOperatorNode"
     lhs: "ExpressionNode"
     rhs: "ExpressionNode"
+
+@dataclass
+class ConditionalExpressionNode(ExpressionNode):
+    cond: "ExpressionNode"
+    true_exp: "ExpressionNode"
+    false_exp: "ExpressionNode"
 
 
 
@@ -447,6 +461,10 @@ def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
             take_token(tokens)
             right = ast_parse_exp(tokens, precedence(next_token))
             left = AssignmentExpressionNode(left, right)
+        elif isinstance(next_token, QuestionMark):
+            middle = ast_parse_conditional_middle(tokens)
+            right = ast_parse_exp(tokens, precedence(next_token))
+            left = ConditionalExpressionNode(left, middle, right)
         elif type(next_token) in [TwoPlusses, TwoMinuses]:
             t = take_token(tokens)
             operator = ast_parse_prefix_postfix_unop(t)
@@ -462,6 +480,12 @@ def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
             left = BinaryExpressionNode(operator, left, right)
         next_token = peek(tokens)
     return left
+
+def ast_parse_conditional_middle(tokens: List["Token"]) -> "ExpressionNode":
+    expect_and_take(QuestionMark, tokens)
+    exp = ast_parse_exp(tokens, 0)
+    expect_and_take(Colon, tokens)
+    return exp
 
 def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
     token = peek(tokens)
@@ -526,10 +550,32 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
         case Identifier("return", True):
             r_statement = ast_parse_return(tokens)
             return StatementBlockItemNode(r_statement)
+        case Identifier("if", True):
+            if_statement = ast_parse_if(tokens)
+            return if_statement
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)
             return StatementBlockItemNode(ExpressionStatementNode(exp))
+
+def ast_parse_if(tokens: List["Token"]) -> "IfStatementNode":
+    if_token: Identifier = expect_and_take(Identifier, tokens)
+    if if_token.name != "if" or not if_token.is_keyword:
+        raise SyntaxError("Not a correct if statement!")
+    expect_and_take(OpenParenthesis, tokens)
+    cond_exp = ast_parse_exp(tokens, 0)
+    expect_and_take(CloseParenthesis, tokens)
+    then_exp = ast_parse_statement(tokens)
+    
+    t = peek(tokens)
+    else_exp = None
+    
+    if isinstance(t, Identifier) and t.name == "else" and t.is_keyword:
+        expect_and_take(Identifier, tokens)
+        else_exp = ast_parse_statement(tokens)
+    
+    return IfStatementNode(cond_exp, then_exp, else_exp)
+
 
 def ast_parse_return(tokens: List["Token"]) -> "ReturnStatementNode":
     s_ret: Identifier = expect_and_take(Identifier, tokens)
