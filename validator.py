@@ -50,6 +50,10 @@ def resolve_variables(node: AstNode, variable_map: Dict[str, str]) -> AstNode:
                 resolve_variables(exp1, variable_map),
                 resolve_variables(exp2, variable_map)
             )
+        case PrefixExpressionNode(op, exp):
+            return PrefixExpressionNode(op, resolve_variables(exp, variable_map))
+        case PostfixExpressionNode(op, exp):
+            return PostfixExpressionNode(op, resolve_variables(exp, variable_map))
         case VariableExpressionNode(name):
             if not name in variable_map:
                 raise SyntaxError("Undeclared variable!")

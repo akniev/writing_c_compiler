@@ -38,6 +38,11 @@ BINARY_OP_TOKENS = [
     RightShiftEqual,
 ]
 
+INC_DEC_TOKENS = [
+    TwoPlusses,
+    TwoMinuses
+]
+
 COMPOUND_ASSIGNMENT_TOKENS = [
     PlusEqual,
     MinusEqual,
@@ -52,6 +57,8 @@ COMPOUND_ASSIGNMENT_TOKENS = [
 ]
 
 BINARY_OP_PRECENDENCE_MAP = {
+    TwoPlusses: 60,             # ++
+    TwoMinuses: 60,             # --
     Asterisk: 50,               # *
     ForwardSlash: 50,           # /
     PercentSign: 50,            # %
@@ -84,7 +91,7 @@ BINARY_OP_PRECENDENCE_MAP = {
 }
 
 def precedence(token: "Token") -> int:
-    if type(token) in BINARY_OP_TOKENS:
+    if type(token) in BINARY_OP_TOKENS + INC_DEC_TOKENS:
         return BINARY_OP_PRECENDENCE_MAP[type(token)]
     raise SyntaxError
 
@@ -190,6 +197,15 @@ class NotOperatorNode(UnaryOperatorNode):
     pass
 
 
+# Prefix/Postfix Operators
+
+class IncrementOperatorNode(UnaryOperatorNode):
+    pass
+
+class DecrementOperatorNode(UnaryOperatorNode):
+    pass
+
+
 
 
 # Binary Operators
@@ -255,39 +271,6 @@ class AssignmentOperatorNode(BinaryOperatorNode):
     pass
 
 
-# # Compound Assignment Operators
-
-# class PlusCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class MinusCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class MultiplyCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class DivideCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class RemainderCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class ArithmeticAndEqualCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class ArithmeticOrCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class ArithmeticXorCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class LeftShiftCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-# class RightShiftCompoundAssignmentOperator(BinaryOperatorNode):
-#     pass
-
-
 
 # Expressions
 
@@ -301,6 +284,16 @@ class ConstantExpressionNode(ExpressionNode):
 @dataclass
 class UnaryExpressionNode(ExpressionNode):
     unary_operator: "UnaryOperatorNode"
+    expression: "ExpressionNode"
+
+@dataclass
+class PrefixExpressionNode(ExpressionNode):
+    operator: "UnaryOperatorNode"
+    expression: "ExpressionNode"
+
+@dataclass
+class PostfixExpressionNode(ExpressionNode):
+    operator: "UnaryOperatorNode"
     expression: "ExpressionNode"
 
 @dataclass
@@ -347,7 +340,10 @@ def expect_and_take(cls: Type, tokens: List["Token"]) -> "Token":
     return take_token(tokens)
 
 def is_unary(token):
-    return isinstance(token, Tilde) or isinstance(token, Hyphen) or isinstance(token, ExclamationMark)
+    return type(token) in [Tilde, Hyphen, ExclamationMark]
+
+def is_prefix_postfix(token):
+    return type(token) in [TwoPlusses, TwoMinuses]
 
 def get_unary_operator(token):
     match token:
@@ -360,11 +356,11 @@ def get_unary_operator(token):
         case _:
             raise SyntaxError
 
-def ast_parse_unary_expression(tokens: List["Token"]) -> UnaryOperatorNode:
+def ast_parse_unary_expression(tokens: List["Token"], min_prec) -> UnaryOperatorNode:
     token = take_token(tokens)
     if not is_unary(token):
         raise SyntaxError
-    exp = ast_parse_factor(tokens)
+    exp = ast_parse_exp(tokens, 60)
     return UnaryExpressionNode(get_unary_operator(token), exp)
 
 def ast_parse_binop(tokens: List["Token"]) -> BinaryOperatorNode:
@@ -434,14 +430,27 @@ def ast_parse_compop(token: Token) -> BinaryOperatorNode:
         case _:
             raise SyntaxError("Unknown compound assignment operator!")
 
+def ast_parse_prefix_postfix_unop(token: "Token") -> "UnaryOperatorNode":
+    match token:
+        case TwoPlusses():
+            return IncrementOperatorNode()
+        case TwoMinuses():
+            return DecrementOperatorNode()
+        case _:
+            raise SyntaxError("Unknown postfix operator!")
+
 def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
-    left = ast_parse_factor(tokens)
+    left = ast_parse_factor(tokens, min_prec)
     next_token = peek(tokens)
-    while type(next_token) in BINARY_OP_TOKENS and precedence(next_token) >= min_prec:
+    while type(next_token) in BINARY_OP_TOKENS + INC_DEC_TOKENS and precedence(next_token) >= min_prec:
         if isinstance(next_token, EqualSign):
             take_token(tokens)
             right = ast_parse_exp(tokens, precedence(next_token))
             left = AssignmentExpressionNode(left, right)
+        elif type(next_token) in [TwoPlusses, TwoMinuses]:
+            t = take_token(tokens)
+            operator = ast_parse_prefix_postfix_unop(t)
+            left = PostfixExpressionNode(operator, left)
         elif type(next_token) in COMPOUND_ASSIGNMENT_TOKENS:
             t = take_token(tokens)
             operator = ast_parse_compop(t)
@@ -454,7 +463,7 @@ def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
         next_token = peek(tokens)
     return left
 
-def ast_parse_factor(tokens: List["Token"]) -> "ExpressionNode":
+def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
     token = peek(tokens)
     if token is None:
         raise SyntaxError("Unexpected end of file")
@@ -469,7 +478,12 @@ def ast_parse_factor(tokens: List["Token"]) -> "ExpressionNode":
         take_token(tokens)
         return VariableExpressionNode(t.name)
     elif is_unary(token):
-        return ast_parse_unary_expression(tokens)
+        return ast_parse_unary_expression(tokens, min_prec)
+    elif is_prefix_postfix(token):
+        t = take_token(tokens)
+        op = ast_parse_prefix_postfix_unop(t)
+        exp = ast_parse_exp(tokens, 1000)
+        return PrefixExpressionNode(op, exp)
     elif isinstance(token, OpenParenthesis):
         expect_and_take(OpenParenthesis, tokens)
         exp = ast_parse_exp(tokens, 0)

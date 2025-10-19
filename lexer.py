@@ -124,13 +124,6 @@ class PercentSign(Token):
     def from_match(cls, m):
         return cls()
 
-class Decrement(Token):
-    pattern: ClassVar[Pattern[str]] = re.compile(r"--")
-
-    @classmethod
-    def from_match(cls, m):
-        raise SyntaxError("Unrecognized token: --")
-
 class Ampersand(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"&")
 
@@ -343,7 +336,6 @@ TOKENS: List["Token"] = [
     CompilerDirective,
     Tilde, 
     Hyphen, 
-    Decrement, 
     PlusSign, 
     Asterisk, 
     ForwardSlash, 
@@ -373,8 +365,8 @@ TOKENS: List["Token"] = [
     CaretEqual,
     LeftShiftEqual,
     RightShiftEqual,
-    # TwoPlusses,
-    # TwoMinuses,
+    TwoPlusses,
+    TwoMinuses,
 ]
 WHITESPACE = re.compile(r"\s*")
 

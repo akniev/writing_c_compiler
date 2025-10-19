@@ -136,6 +136,12 @@ class TNegateOp(TUnaryOperator):
 class TNotOp(TUnaryOperator):
     pass
 
+class TIncrementOp(TUnaryOperator):
+    pass
+
+class TDecrementOp(TUnaryOperator):
+    pass
+
 
 
 
@@ -240,7 +246,48 @@ def t_parse_compound_assignment(
             return result
         case _:
             raise SyntaxError("Wrong lvalue type!")
-    
+
+def t_prefix_postfix_op(op: UnaryOperatorNode) -> TUnaryOperator:
+    match op:
+        case IncrementOperatorNode():
+            return TIncrementOp()
+        case DecrementOperatorNode():
+            return TDecrementOp()
+        case _:
+            raise SyntaxError("Unknown prefix or postfix operator!")
+
+
+def t_parse_prefix_exp(op: UnaryOperatorNode, exp: ExpressionNode, instructions: List["TInstruction"]) -> TValue:
+    if not isinstance(exp, VariableExpressionNode):
+        raise SyntaxError("Wrong operand!")
+    binop = None
+    if isinstance(op, IncrementOperatorNode):
+        binop = AddOperatorNode()
+    elif isinstance(op, DecrementOperatorNode):
+        binop = SubtractOperatorNode()
+    else:
+        raise SyntaxError("Wrong operator!")
+    exp1 = CompoundAssignmentExpressionNode(binop, exp, ConstantExpressionNode(1))
+    result = t_parse_expression(exp1, instructions)
+    return result
+
+def t_parse_postfix_exp(op: UnaryOperatorNode, exp: ExpressionNode, instructions: List["TInstruction"]) -> TValue:
+    if not isinstance(exp, VariableExpressionNode):
+        raise SyntaxError("Wrong operand!")
+    binop = None
+    if isinstance(op, IncrementOperatorNode):
+        binop = TAdditionOperator()
+    elif isinstance(op, DecrementOperatorNode):
+        binop = TSubtractionOperator()
+    else:
+        raise SyntaxError("Wrong operator!")
+    result: TVariable = t_parse_expression(exp, instructions)
+    result1 = TVariable(get_temp_var_name("result"))
+    instructions.extend([
+        TCopyInstruction(result, result1),
+        TBinaryInstruction(binop, result, TConstant(1), result),
+    ])
+    return result1
 
 def t_parse_block_items(b_items: List["BlockItemNode"]) -> List["TInstruction"]:
     instructions = []
@@ -390,5 +437,9 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             return t_parse_assignment(name, rhs, instructions)
         case CompoundAssignmentExpressionNode(binop, lhs, rhs):
             return t_parse_compound_assignment(binop, lhs, rhs, instructions)
+        case PrefixExpressionNode(op, exp):
+            return t_parse_prefix_exp(op, exp, instructions)
+        case PostfixExpressionNode(op, exp):
+            return t_parse_postfix_exp(op, exp, instructions)
         case _:
             raise SyntaxError
