@@ -184,8 +184,16 @@ class ExpressionStatementNode(StatementNode):
 @dataclass
 class IfStatementNode(StatementNode):
     cond: "ExpressionNode"
-    then_exp: "ExpressionNode"
-    else_exp: Optional["ExpressionNode"]
+    then_st: "StatementNode"
+    else_st: Optional["StatementNode"]
+
+@dataclass
+class LabeledStatement(StatementNode):
+    name: str
+
+@dataclass
+class GotoStatement(StatementNode):
+    label: str
 
 class NullStatementNode(StatementNode):
     pass
@@ -346,8 +354,8 @@ def expect(cls: Type, tokens: List["Token"]):
 def take_token(tokens: List["Token"]) -> "Token":
     return tokens.pop(0)
 
-def peek(tokens: List["Token"]) -> Optional["Token"]:
-    return tokens[0] if tokens else None
+def peek(tokens: List["Token"], steps = 1) -> Optional["Token"]:
+    return tokens[steps - 1] if len(tokens) >= steps else None
 
 def expect_and_take(cls: Type, tokens: List["Token"]) -> "Token":
     expect(cls, tokens)
@@ -550,9 +558,18 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
         case Identifier("return", True):
             r_statement = ast_parse_return(tokens)
             return StatementBlockItemNode(r_statement)
+        case Identifier("goto", True):
+            expect_and_take(Identifier, tokens)
+            t: Identifier = expect_and_take(Identifier, tokens)
+            expect_and_take(Semicolon, tokens)
+            return StatementBlockItemNode(GotoStatement(t.name))
         case Identifier("if", True):
             if_statement = ast_parse_if(tokens)
-            return if_statement
+            return StatementBlockItemNode(if_statement)
+        case Identifier(name, False) if isinstance(peek(tokens, 2), Colon):
+            expect_and_take(Identifier, tokens)
+            expect_and_take(Colon, tokens)
+            return StatementBlockItemNode(LabeledStatement(name))
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)

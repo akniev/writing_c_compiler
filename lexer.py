@@ -3,7 +3,7 @@ from typing import *
 import re
 
 
-KEYWORDS = set(["int", "void", "return", "if", "else"])
+KEYWORDS = set(["int", "void", "return", "if", "else", "goto"])
 
 class Token:
     pattern: ClassVar[Pattern[str]]

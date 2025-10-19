@@ -216,6 +216,8 @@ def t_parse_block_item(b_item: "BlockItemNode") -> List["TInstruction"]:
             return t_parse_statement(s_node)
         case DeclarationBlockItemNode(d_node):
             return t_parse_declaration(d_node)
+        case _:
+            raise SyntaxError
 
 
 def t_parse_declaration(d_node: DeclarationNode) -> List["TInstruction"]:
@@ -271,6 +273,30 @@ def t_parse_prefix_exp(op: UnaryOperatorNode, exp: ExpressionNode, instructions:
     result = t_parse_expression(exp1, instructions)
     return result
 
+def t_parse_cond_exp(cond: "ExpressionNode", 
+                     true_exp: "ExpressionNode", 
+                     false_exp: "ExpressionNode", 
+                     instructions: List["TInstruction"]) -> TValue:
+    cond_result = t_parse_expression(cond, instructions)
+    e2_label = get_label_name("e2_label")
+    end_label = get_label_name("end_label")
+    result_var_name = get_temp_var_name("result")
+    instructions.extend([
+        TJumpIfZeroInstruction(cond_result, e2_label)
+    ])
+    v1_result = t_parse_expression(true_exp, instructions)
+    instructions.extend([
+        TCopyInstruction(v1_result, TVariable(result_var_name)),
+        TJumpInstruction(end_label),
+        TLabelInstruction(e2_label),
+    ])
+    v2_result = t_parse_expression(false_exp, instructions)
+    instructions.extend([
+        TCopyInstruction(v2_result, TVariable(result_var_name)),
+        TLabelInstruction(end_label),
+    ])
+    return TVariable(result_var_name)
+
 def t_parse_postfix_exp(op: UnaryOperatorNode, exp: ExpressionNode, instructions: List["TInstruction"]) -> TValue:
     if not isinstance(exp, VariableExpressionNode):
         raise SyntaxError("Wrong operand!")
@@ -298,6 +324,37 @@ def t_parse_block_items(b_items: List["BlockItemNode"]) -> List["TInstruction"]:
 
     return instructions
 
+def t_parse_if(cond: "ExpressionNode", 
+               then_exp: "StatementNode", 
+               else_exp: Optional["StatementNode"]) -> List["TInstruction"]:
+    instructions = []
+    cond_result = t_parse_expression(cond, instructions)
+
+    if else_exp is not None:
+        else_label = get_label_name("else")
+        end_label = get_label_name("end")
+        instructions.extend([
+            TJumpIfZeroInstruction(cond_result, else_label)
+        ])
+        instructions.extend(t_parse_block_item(then_exp))
+        instructions.extend([
+            TJumpInstruction(end_label),
+            TLabelInstruction(else_label),
+        ])
+        instructions.extend(t_parse_block_item(else_exp))
+        instructions.extend([
+            TLabelInstruction(end_label)
+        ])
+    else:
+        end_label = get_label_name("end")
+        instructions.extend([
+            TJumpIfZeroInstruction(cond_result, end_label)
+        ])
+        instructions.extend(t_parse_block_item(then_exp))
+        instructions.extend([
+            TLabelInstruction(end_label)
+        ])
+    return instructions
 
 def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
     match fstatement:
@@ -309,6 +366,16 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             instructions = []
             var = t_parse_expression(exp, instructions)
             return instructions
+        case IfStatementNode(cond, then_st, else_st):
+            return t_parse_if(cond, then_st, else_st)
+        case GotoStatement(label):
+            return [
+                TJumpInstruction(label)
+            ]
+        case LabeledStatement(name):
+            return [
+                TLabelInstruction(name)
+            ]
         case NullStatementNode():
             return []
         case _:
@@ -441,5 +508,7 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             return t_parse_prefix_exp(op, exp, instructions)
         case PostfixExpressionNode(op, exp):
             return t_parse_postfix_exp(op, exp, instructions)
+        case ConditionalExpressionNode(cond, true_exp, false_exp):
+            return t_parse_cond_exp(cond, true_exp, false_exp, instructions)
         case _:
             raise SyntaxError
