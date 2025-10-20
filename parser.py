@@ -206,6 +206,50 @@ class CompoundStatement(StatementNode):
 class NullStatementNode(StatementNode):
     pass
 
+@dataclass
+class BreakStatementNode(StatementNode):
+    label: str
+
+@dataclass
+class ContinueStatementNode(StatementNode):
+    label: str
+
+@dataclass
+class WhileStatementNode(StatementNode):
+    cond: "ExpressionNode"
+    body: "StatementNode"
+    label: str
+
+@dataclass
+class DoWhileStatementNode(StatementNode):
+    body: "StatementNode"
+    cond: "ExpressionNode"
+    label: str
+
+@dataclass
+class ForStatementNode(StatementNode):
+    init: "ForInitNode"
+    condition: Optional["ExpressionNode"]
+    post: Optional["ExpressionNode"]
+    body: "StatementNode"
+    label: str
+
+
+
+
+# ForInit
+
+class ForInitNode(AstNode):
+    pass
+
+@dataclass
+class ForInitDeclarationNode(ForInitNode):
+    declaration: "DeclarationNode"
+
+@dataclass
+class ForInitExpressionNode(ForInitNode):
+    expression: Optional["ExpressionNode"]
+
 
 # Unary Operators
 
@@ -358,6 +402,12 @@ def expect(cls: Type, tokens: List["Token"]):
     result = bool(tokens) and isinstance(tokens[0], cls)
     if not result:
         raise SyntaxError("Unexpected symbol")
+    
+def expect_and_take_identifier(name: str, is_keyword: bool, tokens: List["Token"]) -> Identifier:
+    t: Identifier = expect_and_take(Identifier, tokens)
+    if t.name != name or t.is_keyword != is_keyword:
+        raise SyntaxError("Wrong identifier!")
+    return t
 
 def take_token(tokens: List["Token"]) -> "Token":
     return tokens.pop(0)
@@ -543,10 +593,10 @@ def ast_parse_block_item(tokens: List["Token"]) -> "BlockItemNode":
             return ast_parse_statement(tokens)
 
 def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationBlockItemNode":
-    decl_type: Identifier = expect_and_take(Identifier, tokens)
-    if (not decl_type.is_keyword) or (decl_type.name != "int"):
-        raise SyntaxError
+    expect_and_take_identifier("int", True, tokens)
     decl_identifier: Identifier = expect_and_take(Identifier, tokens)
+    if decl_identifier.is_keyword:
+        raise SyntaxError
     t = peek(tokens)
     if isinstance(t, Semicolon):
         decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier.name, None))
@@ -557,6 +607,55 @@ def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationBlockItemNode":
     decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier.name, exp))
     expect_and_take(Semicolon, tokens)
     return decl
+
+
+def ast_parse_while_loop(tokens: List["Token"]) -> WhileStatementNode:
+    expect_and_take_identifier("while", True, tokens)
+    expect_and_take(OpenParenthesis, tokens)
+    cond = ast_parse_exp(tokens, 0)
+    expect_and_take(CloseParenthesis, tokens)
+    st = ast_parse_statement(tokens)
+    return WhileStatementNode(cond, st, "")
+
+
+def ast_parse_do_while_loop(tokens: List["Token"]) -> DoWhileStatementNode:
+    expect_and_take_identifier("do", True, tokens)
+    st = ast_parse_statement(tokens)
+    expect_and_take_identifier("while", True, tokens)
+    expect_and_take(OpenParenthesis, tokens)
+    cond = ast_parse_exp(tokens, 0)
+    expect_and_take(CloseParenthesis, tokens)
+    expect_and_take(Semicolon, tokens)
+
+
+def ast_parse_for_init(tokens: List["Token"]) -> Optional["ForInitDeclarationNode"]:
+    match peek(tokens):
+        case Semicolon():
+            expect_and_take(Semicolon, tokens)
+            return None
+        case Identifier("int", True):
+            return ast_parse_declaration(tokens).declaration
+        case _:
+            exp = ast_parse_exp(tokens, 0)
+            expect_and_take(Semicolon, tokens)
+            return exp
+
+
+def ast_parse_for_loop(tokens: List["Token"]) -> ForStatementNode:
+    expect_and_take_identifier("for", True, tokens)
+    expect_and_take(OpenParenthesis, tokens)
+    for_init = ast_parse_for_init(tokens)
+    for_cond = None
+    if not isinstance(peek(tokens), Semicolon):
+        for_cond = ast_parse_exp(tokens, 0)
+    expect_and_take(Semicolon, tokens)
+    for_post = None
+    if not isinstance(peek(tokens), CloseParenthesis):
+        for_post = ast_parse_exp(tokens, 0)
+    expect_and_take(CloseParenthesis, tokens)
+    for_body = ast_parse_statement(tokens)
+    return ForStatementNode(for_init, for_cond, for_post, for_body, "")
+
 
 def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
     match peek(tokens):
@@ -578,6 +677,23 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
             expect_and_take(Identifier, tokens)
             expect_and_take(Colon, tokens)
             return StatementBlockItemNode(LabeledStatement(name))
+        case Identifier("break", True):
+            expect_and_take(Identifier, tokens)
+            expect_and_take(Semicolon, tokens)
+            return StatementBlockItemNode(BreakStatementNode(""))
+        case Identifier("continue", True):
+            expect_and_take(Identifier, tokens)
+            expect_and_take(Semicolon, tokens)
+            return StatementBlockItemNode(ContinueStatementNode(""))
+        case Identifier("while", True):
+            while_loop = ast_parse_while_loop(tokens)
+            return StatementBlockItemNode(while_loop)
+        case Identifier("do", True):
+            do_while_loop = ast_parse_do_while_loop(tokens)
+            return StatementBlockItemNode(do_while_loop)
+        case Identifier("for", True):
+            for_loop = ast_parse_for_loop(tokens)
+            return StatementBlockItemNode(for_loop)
         case OpenBrace():
             block = ast_parse_block(tokens)
             return StatementBlockItemNode(CompoundStatement(block))
