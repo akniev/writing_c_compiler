@@ -626,6 +626,7 @@ def ast_parse_do_while_loop(tokens: List["Token"]) -> DoWhileStatementNode:
     cond = ast_parse_exp(tokens, 0)
     expect_and_take(CloseParenthesis, tokens)
     expect_and_take(Semicolon, tokens)
+    return DoWhileStatementNode(st, cond, "")
 
 
 def ast_parse_for_init(tokens: List["Token"]) -> Optional["ForInitDeclarationNode"]:

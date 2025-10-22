@@ -65,6 +65,33 @@ def resolve_variables(node: AstNode, block_id: int, variable_map: Dict[str, str]
             return node
         case CompoundStatement(block):
             return CompoundStatement(resolve_variables(block, block_id, variable_map))
+        case BreakStatementNode(_):
+            return node
+        case ContinueStatementNode(_):
+            return node
+        
+        case WhileStatementNode(cond, body, label):
+            n_cond = resolve_variables(cond, block_id, variable_map)
+            n_body = resolve_variables(body, block_id, variable_map)
+            return WhileStatementNode(n_cond, n_body, label)
+        case DoWhileStatementNode(body, cond, label):
+            n_cond = resolve_variables(cond, block_id, variable_map)
+            n_body = resolve_variables(body, block_id, variable_map)
+            return DoWhileStatementNode(n_body, n_cond, label)
+        case ForStatementNode(init, cond, post, body, label):
+            new_block_id = get_block_id()
+            new_variable_map = variable_map.copy()
+            n_init = resolve_variables(init, new_block_id, new_variable_map)
+            n_cond = resolve_variables(cond, new_block_id, new_variable_map) if cond else None
+            n_post = resolve_variables(post, new_block_id, new_variable_map) if post else None
+            n_body = resolve_variables(body, new_block_id, new_variable_map)
+            return ForStatementNode(n_init, n_cond, n_post, n_body, label)
+        case ForInitDeclarationNode(decl):
+            n_decl = resolve_variables(decl, block_id, variable_map)
+            return ForInitDeclarationNode(n_decl)
+        case ForInitExpressionNode(exp):
+            n_exp = resolve_variables(exp, block_id, variable_map)
+            return ForInitExpressionNode(n_exp)
         
         # Expressions
         case ConstantExpressionNode(_):
@@ -180,10 +207,87 @@ def check_labels_have_statements(node: AstNode):
         case _:
             raise SyntaxError
 
+# def traverse_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Optional[AstNode]]) -> AstNode:
+#     processed = func(node, params)
+#     result = processed if processed is not None else node
+#     fs = vars(result)
+
+#     for f_name in fs.keys():
+#         f_val = fs[f_name]
+#         if isinstance(f_val, AstNode):
+#             fs[f_name] = traverse_ast(f_val, params, func)
+#         elif isinstance(f_val, list):
+#             for el in f_val:
+#                 if isinstance(el, AstNode):
+#                     traverse_ast(el, params, func)
+
+#     return result
+
+def label_break_statements(node: AstNode, labels: List["str"]) -> AstNode:   
+    match node:
+        # Top Level
+        case ProgramNode(func):
+            n_func = label_break_statements(func, labels)
+            return ProgramNode(n_func)
+        case FunctionNode(name, body):
+            n_body = label_break_statements(body, labels)
+            return FunctionNode(name, n_body)
+        case DeclarationNode(_, _):
+            return node
+        
+        # Block Items
+        case StatementBlockItemNode(statement):
+            n_statement = label_break_statements(statement, labels)
+            return StatementBlockItemNode(n_statement)
+        case DeclarationBlockItemNode(declaration):
+            n_declaration = label_break_statements(declaration, labels)
+            return DeclarationBlockItemNode(n_declaration)
+        case BlockNode(items):
+            n_items = []
+            for item in items:
+                n_items.append(label_break_statements(item, labels))
+            return BlockNode(n_items)
+        
+        # Statements
+        case ReturnStatementNode(_) | ExpressionStatementNode(_) | LabeledStatement(_) | GotoStatement(_) | NullStatementNode():
+            return node
+        case IfStatementNode(cond, then_st, else_st):
+            n_then_st = label_break_statements(then_st, labels)
+            n_else_st = label_break_statements(else_st, labels) if else_st else None
+            return IfStatementNode(cond, n_then_st, n_else_st)
+        case CompoundStatement(block):
+            n_block = label_break_statements(block, labels)
+            return CompoundStatement(n_block)
+        case WhileStatementNode(cond, body, _):
+            loop_label = get_label_name("while")
+            n_body = label_break_statements(body, labels + [loop_label])
+            return WhileStatementNode(cond, n_body, loop_label)
+        case DoWhileStatementNode(body, cond, label):
+            loop_label = get_label_name("dowhile")
+            n_body = label_break_statements(body, labels + [loop_label])
+            return DoWhileStatementNode(n_body, cond, loop_label)
+        case ForStatementNode(init, cond, post, body, _):
+            loop_label = get_label_name("for")
+            n_body = label_break_statements(body, labels + [loop_label])
+            return ForStatementNode(init, cond, post, n_body, loop_label)
+        case BreakStatementNode(_):
+            if not labels:
+                raise SyntaxError
+            return BreakStatementNode(labels[-1])
+        case ContinueStatementNode(_):
+            if not labels:
+                raise SyntaxError
+            return ContinueStatementNode(labels[-1])
+        case _:
+            raise SyntaxError
+
+
 def validate(ast: AstNode) -> "AstNode":
     s1 = resolve_variables(ast, 0, dict())
     label_map = dict()
     s2 = resolve_labels(s1, False, "", label_map)
     s3 = resolve_labels(s2, True, "", label_map)
     check_labels_have_statements(s3)
-    return s3
+    s4 = label_break_statements(s3, [])
+    # traverse_ast(s3, {}, lambda node: print(node))
+    return s4
