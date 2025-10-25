@@ -197,6 +197,17 @@ class LabeledStatement(StatementNode):
     statement: "StatementNode"
 
 @dataclass
+class CaseLabeledStatement(StatementNode):
+    val: "ExpressionNode"
+    statement: "StatementNode"
+    label: str
+
+@dataclass
+class DefaultLabeledStatement(StatementNode):
+    statement: "StatementNode"
+    label: str
+
+@dataclass
 class GotoStatement(StatementNode):
     label: str
 
@@ -235,6 +246,12 @@ class ForStatementNode(StatementNode):
     body: "StatementNode"
     label: str
 
+@dataclass
+class SwitchStatementNode(StatementNode):
+    exp: "ExpressionNode"
+    body: "StatementNode"
+    cases: List[Tuple["ExpressionNode", str]]
+    label: str
 
 
 
@@ -675,6 +692,24 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementNode":
         case Identifier("if", True):
             if_statement = ast_parse_if(tokens)
             return if_statement
+        case Identifier("switch", True):
+            expect_and_take(Identifier, tokens)
+            expect_and_take(OpenParenthesis, tokens)
+            exp = ast_parse_exp(tokens, 0)
+            expect_and_take(CloseParenthesis, tokens)
+            st = ast_parse_statement(tokens)
+            return SwitchStatementNode(exp, st, [], "")
+        case Identifier("case"):
+            expect_and_take(Identifier, tokens)
+            val = ast_parse_exp(tokens, 0)
+            expect_and_take(Colon, tokens)
+            st = ast_parse_statement(tokens)
+            return CaseLabeledStatement(val, st, "")
+        case Identifier("default"):
+            expect_and_take(Identifier, tokens)
+            expect_and_take(Colon, tokens)
+            st = ast_parse_statement(tokens)
+            return DefaultLabeledStatement(st, "")
         case Identifier(name, False) if isinstance(peek(tokens, 2), Colon):
             expect_and_take(Identifier, tokens)
             expect_and_take(Colon, tokens)
