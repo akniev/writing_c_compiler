@@ -587,24 +587,24 @@ def ast_parse_block_item(tokens: List["Token"]) -> "BlockItemNode":
     match peek(tokens):
         # Declaration
         case Identifier("int", True): 
-            return ast_parse_declaration(tokens)
+            return DeclarationBlockItemNode(ast_parse_declaration(tokens))
         # Statement
         case _:
-            return ast_parse_statement(tokens)
+            return StatementBlockItemNode(ast_parse_statement(tokens))
 
-def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationBlockItemNode":
+def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationNode":
     expect_and_take_identifier("int", True, tokens)
     decl_identifier: Identifier = expect_and_take(Identifier, tokens)
     if decl_identifier.is_keyword:
         raise SyntaxError
     t = peek(tokens)
     if isinstance(t, Semicolon):
-        decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier.name, None))
+        decl = DeclarationNode(decl_identifier.name, None)
         expect_and_take(Semicolon, tokens)
         return decl
     expect_and_take(EqualSign, tokens)
     exp = ast_parse_exp(tokens, 0)
-    decl = DeclarationBlockItemNode(DeclarationNode(decl_identifier.name, exp))
+    decl = DeclarationNode(decl_identifier.name, exp)
     expect_and_take(Semicolon, tokens)
     return decl
 
@@ -629,17 +629,17 @@ def ast_parse_do_while_loop(tokens: List["Token"]) -> DoWhileStatementNode:
     return DoWhileStatementNode(st, cond, "")
 
 
-def ast_parse_for_init(tokens: List["Token"]) -> Optional["ForInitDeclarationNode"]:
+def ast_parse_for_init(tokens: List["Token"]) -> Optional["ForInitNode"]:
     match peek(tokens):
         case Semicolon():
             expect_and_take(Semicolon, tokens)
             return None
         case Identifier("int", True):
-            return ast_parse_declaration(tokens).declaration
+            return ForInitDeclarationNode(ast_parse_declaration(tokens))
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)
-            return exp
+            return ForInitExpressionNode(exp)
 
 
 def ast_parse_for_loop(tokens: List["Token"]) -> ForStatementNode:
@@ -658,50 +658,50 @@ def ast_parse_for_loop(tokens: List["Token"]) -> ForStatementNode:
     return ForStatementNode(for_init, for_cond, for_post, for_body, "")
 
 
-def ast_parse_statement(tokens: List["Token"]) -> "StatementBlockItemNode":
+def ast_parse_statement(tokens: List["Token"]) -> "StatementNode":
     match peek(tokens):
         case Semicolon():
             take_token(tokens)
-            return StatementBlockItemNode(NullStatementNode())
+            return NullStatementNode()
         case Identifier("return", True):
             r_statement = ast_parse_return(tokens)
-            return StatementBlockItemNode(r_statement)
+            return r_statement
         case Identifier("goto", True):
             expect_and_take(Identifier, tokens)
             t: Identifier = expect_and_take(Identifier, tokens)
             expect_and_take(Semicolon, tokens)
-            return StatementBlockItemNode(GotoStatement(t.name))
+            return GotoStatement(t.name)
         case Identifier("if", True):
             if_statement = ast_parse_if(tokens)
-            return StatementBlockItemNode(if_statement)
+            return if_statement
         case Identifier(name, False) if isinstance(peek(tokens, 2), Colon):
             expect_and_take(Identifier, tokens)
             expect_and_take(Colon, tokens)
-            return StatementBlockItemNode(LabeledStatement(name))
+            return LabeledStatement(name)
         case Identifier("break", True):
             expect_and_take(Identifier, tokens)
             expect_and_take(Semicolon, tokens)
-            return StatementBlockItemNode(BreakStatementNode(""))
+            return BreakStatementNode("")
         case Identifier("continue", True):
             expect_and_take(Identifier, tokens)
             expect_and_take(Semicolon, tokens)
-            return StatementBlockItemNode(ContinueStatementNode(""))
+            return ContinueStatementNode("")
         case Identifier("while", True):
             while_loop = ast_parse_while_loop(tokens)
-            return StatementBlockItemNode(while_loop)
+            return while_loop
         case Identifier("do", True):
             do_while_loop = ast_parse_do_while_loop(tokens)
-            return StatementBlockItemNode(do_while_loop)
+            return do_while_loop
         case Identifier("for", True):
             for_loop = ast_parse_for_loop(tokens)
-            return StatementBlockItemNode(for_loop)
+            return for_loop
         case OpenBrace():
             block = ast_parse_block(tokens)
-            return StatementBlockItemNode(CompoundStatement(block))
+            return CompoundStatement(block)
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)
-            return StatementBlockItemNode(ExpressionStatementNode(exp))
+            return ExpressionStatementNode(exp)
 
 def ast_parse_if(tokens: List["Token"]) -> "IfStatementNode":
     if_token: Identifier = expect_and_take(Identifier, tokens)

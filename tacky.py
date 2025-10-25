@@ -336,12 +336,12 @@ def t_parse_if(cond: "ExpressionNode",
         instructions.extend([
             TJumpIfZeroInstruction(cond_result, else_label)
         ])
-        instructions.extend(t_parse_block_item(then_exp))
+        instructions.extend(t_parse_statement(then_exp))
         instructions.extend([
             TJumpInstruction(end_label),
             TLabelInstruction(else_label),
         ])
-        instructions.extend(t_parse_block_item(else_exp))
+        instructions.extend(t_parse_statement(else_exp))
         instructions.extend([
             TLabelInstruction(end_label)
         ])
@@ -350,11 +350,19 @@ def t_parse_if(cond: "ExpressionNode",
         instructions.extend([
             TJumpIfZeroInstruction(cond_result, end_label)
         ])
-        instructions.extend(t_parse_block_item(then_exp))
+        instructions.extend(t_parse_statement(then_exp))
         instructions.extend([
             TLabelInstruction(end_label)
         ])
     return instructions
+
+def t_parse_for_loop_init(init: "ForInitNode", instructions: List["TInstruction"]):
+    match init:
+        case ForInitDeclarationNode(DeclarationNode(name, exp)):
+            assignment_exp = AssignmentExpressionNode(VariableExpressionNode(name), exp)
+            t_parse_expression(assignment_exp, instructions)
+        case ForInitExpressionNode(exp):
+            t_parse_expression(exp, instructions)
 
 def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
     match fstatement:
@@ -378,8 +386,91 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             ]
         case CompoundStatement(BlockNode(items)):
             return t_parse_block_items(items)
+        
+        case DoWhileStatementNode(body, cond, label):
+            instructions = []
+            start_label = get_label_name("start")
+            continue_label = f"continue.{label}"
+            break_label = f"break.{label}"
+            body_insts = t_parse_statement(body)
+
+            instructions.extend([
+                TLabelInstruction(start_label),
+            ])
+            instructions.extend(body_insts)
+            instructions.extend([
+                TLabelInstruction(continue_label),
+            ])
+            cond_result = t_parse_expression(cond, instructions)
+            instructions.extend([
+                TJumpIfNotZeroInstruction(cond_result, start_label),
+                TLabelInstruction(break_label),
+            ])    
+            return instructions
+        case WhileStatementNode(cond, body, label):
+            instructions = []
+            continue_label = f"continue.{label}"
+            break_label = f"break.{label}"
+
+            instructions.extend([
+                TLabelInstruction(continue_label),
+            ])
+            cond_result = t_parse_expression(cond, instructions)
+            instructions.extend([
+                TJumpIfZeroInstruction(cond_result, break_label)
+            ])
+            body_insts = t_parse_statement(body)
+            instructions.extend(body_insts)
+            instructions.extend([
+                TJumpInstruction(continue_label),
+                TLabelInstruction(break_label),
+            ])
+            return instructions
+        case ForStatementNode(init, condition, post, body, label):
+            instructions = []
+            start_label = get_label_name(f"start.{label}")
+            break_label = f"break.{label}"
+            continue_label = f"continue.{label}"
+            if init:
+                t_parse_for_loop_init(init, instructions)
+            
+            instructions.extend([
+                TLabelInstruction(start_label),
+            ])
+
+            cond_result = None
+            if condition:
+                cond_result = t_parse_expression(condition, instructions)
+            else:
+                cond_result = TConstant(1)
+            
+            instructions.extend([
+                TJumpIfZeroInstruction(cond_result, break_label),
+            ])
+            instructions.extend(
+                t_parse_statement(body)
+            )
+            instructions.extend([
+                TLabelInstruction(continue_label)
+            ])
+            if post:
+                t_parse_expression(post, instructions)
+            instructions.extend([
+                TJumpInstruction(start_label),
+                TLabelInstruction(break_label),
+            ])
+            return instructions
+
         case NullStatementNode():
             return []
+        case BreakStatementNode(label):
+            return [
+                TJumpInstruction(f"break.{label}")
+            ]
+        case ContinueStatementNode(label):
+            return [
+                TJumpInstruction(f"continue.{label}")
+            ]
         case _:
             raise SyntaxError
 
