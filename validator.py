@@ -92,17 +92,17 @@ def resolve_variables(node: AstNode, block_id: int, variable_map: Dict[str, str]
         case ForInitExpressionNode(exp):
             n_exp = resolve_variables(exp, block_id, variable_map)
             return ForInitExpressionNode(n_exp)
-        case SwitchStatementNode(exp, body, cases, label):
+        case SwitchStatementNode(exp, body, cases, defaultCase, label):
             n_exp = resolve_variables(exp, block_id, variable_map)
             n_body = resolve_variables(body, block_id, variable_map)
-            return SwitchStatementNode(n_exp, n_body, cases, label)
-        case CaseLabeledStatement(val, st, label):
+            return SwitchStatementNode(n_exp, n_body, cases, defaultCase, label)
+        case CaseLabeledStatement(val, st, switch_label, label):
             # val has to be a constant expression so we don't resolve variables for it
             n_st = resolve_variables(st, block_id, variable_map)
-            return CaseLabeledStatement(val, n_st, label)
-        case DefaultLabeledStatement(st, label):
+            return CaseLabeledStatement(val, n_st, switch_label, label)
+        case DefaultLabeledStatement(st, switch_label, label):
             n_st = resolve_variables(st, block_id, variable_map)
-            return DefaultLabeledStatement(n_st, label)
+            return DefaultLabeledStatement(n_st, switch_label, label)
 
         # Expressions
         case ConstantExpressionNode(_):
@@ -203,32 +203,32 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
             new_name = get_label_name(fname)
             label_map[fname] = new_name
             return LabeledStatement(new_name, resolve_labels(statement, update_goto, func_prefix, label_map))
-        case SwitchStatementNode(exp, st, cases, label):
-            return SwitchStatementNode(exp, resolve_labels(st, update_goto, func_prefix, label_map), cases, label)
-        case CaseLabeledStatement(val, st, label):
-            return CaseLabeledStatement(val, resolve_labels(st, update_goto, func_prefix, label_map), label)
-        case DefaultLabeledStatement(st, label):
-            return DefaultLabeledStatement(resolve_labels(st, update_goto, func_prefix, label_map), label)
+        case SwitchStatementNode(exp, st, cases, defaultCase, label):
+            return SwitchStatementNode(exp, resolve_labels(st, update_goto, func_prefix, label_map), cases, defaultCase, label)
+        case CaseLabeledStatement(val, st, switch_label, label):
+            return CaseLabeledStatement(val, resolve_labels(st, update_goto, func_prefix, label_map), switch_label, label)
+        case DefaultLabeledStatement(st, switch_label, label):
+            return DefaultLabeledStatement(resolve_labels(st, update_goto, func_prefix, label_map), switch_label, label)
         case CompoundStatement(block):
             return CompoundStatement(resolve_labels(block, update_goto, func_prefix, label_map))
         case _:
             return node
 
-# def traverse_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Optional[AstNode]]) -> AstNode:
-#     processed = func(node, params)
-#     result = processed if processed is not None else node
-#     fs = vars(result)
+def traverse_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Optional[AstNode]]) -> AstNode:
+    processed = func(node, params)
+    result = processed if processed is not None else node
+    fs = vars(result)
 
-#     for f_name in fs.keys():
-#         f_val = fs[f_name]
-#         if isinstance(f_val, AstNode):
-#             fs[f_name] = traverse_ast(f_val, params, func)
-#         elif isinstance(f_val, list):
-#             for el in f_val:
-#                 if isinstance(el, AstNode):
-#                     traverse_ast(el, params, func)
+    for f_name in fs.keys():
+        f_val = fs[f_name]
+        if isinstance(f_val, AstNode):
+            fs[f_name] = traverse_ast(f_val, params, func)
+        elif isinstance(f_val, list):
+            for el in f_val:
+                if isinstance(el, AstNode):
+                    traverse_ast(el, params, func)
 
-#     return result
+    return result
 
 def label_break_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> AstNode:   
     match node:
@@ -260,20 +260,20 @@ def label_break_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> 
             return node
         case LabeledStatement(name, statement):
             return LabeledStatement(name, label_break_statements(statement, labels))
-        case CaseLabeledStatement(val, st, _):
+        case CaseLabeledStatement(val, st, _, label):
             labels_copy = labels[:]
             while labels_copy and labels_copy[-1][1] != "switch":
                 labels_copy.pop()
             if not labels_copy:
                 raise SyntaxError
-            return CaseLabeledStatement(val, label_break_statements(st, labels), labels_copy[-1][0])
-        case DefaultLabeledStatement(st, label):
+            return CaseLabeledStatement(val, label_break_statements(st, labels), labels_copy[-1][0], label)
+        case DefaultLabeledStatement(st, _, label):
             labels_copy = labels[:]
             while labels_copy and labels_copy[-1][1] != "switch":
                 labels_copy.pop()
             if not labels_copy:
                 raise SyntaxError
-            return DefaultLabeledStatement(label_break_statements(st, labels), labels_copy[-1][0])
+            return DefaultLabeledStatement(label_break_statements(st, labels), labels_copy[-1][0], label)
         case IfStatementNode(cond, then_st, else_st):
             n_then_st = label_break_statements(then_st, labels)
             n_else_st = label_break_statements(else_st, labels) if else_st else None
@@ -293,10 +293,10 @@ def label_break_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> 
             loop_label = get_label_name("for")
             n_body = label_break_statements(body, labels + [(loop_label, "loop")])
             return ForStatementNode(init, cond, post, n_body, loop_label)
-        case SwitchStatementNode(exp, body, cases, _):
+        case SwitchStatementNode(exp, body, cases, defaultCase, _):
             switch_label = get_label_name("switch")
             n_body = label_break_statements(body, labels + [(switch_label, "switch")])
-            return SwitchStatementNode(exp, n_body, cases, switch_label)
+            return SwitchStatementNode(exp, n_body, cases, defaultCase, switch_label)
         case BreakStatementNode(_):
             if not labels:
                 raise SyntaxError
@@ -311,6 +311,63 @@ def label_break_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> 
         case _:
             raise SyntaxError
 
+def validate_prefix_and_postfix(node: AstNode, params: dict):
+    match node:
+        case PrefixExpressionNode(op, exp) | PostfixExpressionNode(op, exp):
+            if not isinstance(exp, VariableExpressionNode):
+                raise SyntaxError
+        case _:
+            pass
+
+def validate_non_constant_cases(node: AstNode, params: dict):
+    match node:
+        case CaseLabeledStatement(val, statement, _, _):
+            if not isinstance(val, ConstantExpressionNode):
+                raise SyntaxError
+        case _:
+            pass
+
+def assign_unique_labels_to_cases(node: AstNode, params: dict):
+    match node:
+        case CaseLabeledStatement(ConstantExpressionNode(val), _, switch_label, _) as c_node:
+            c_node.label = get_label_name(f"{switch_label}.case{val}")
+        case DefaultLabeledStatement(_, switch_label, _) as d_node:
+            d_node.label = get_label_name(f"{switch_label}.default")
+        case CaseLabeledStatement(_, _, _, _):
+            raise SyntaxError("Wrong case format!")
+
+def validate_case_uniqueness(node: AstNode, params: dict):
+    cases_for_switches = params["cases"]
+    defaults_for_switches = params["defaults"]
+    match node:
+        case CaseLabeledStatement(ConstantExpressionNode(val), statement, switch_label, _):
+            if not switch_label in cases_for_switches:
+                cases_for_switches[switch_label] = set()
+            if val in cases_for_switches[switch_label]:
+                raise SyntaxError("Duplicate case!")
+            cases_for_switches[switch_label].add(val)
+        case DefaultLabeledStatement(_, switch_label, _):
+            if switch_label in defaults_for_switches:
+                raise SyntaxError("Duplicate default label!")
+            defaults_for_switches.add(switch_label)
+
+def switch_add_cases_info(node: AstNode, params: dict):
+    switches_dict = params["switches"]
+    match node:
+        case SwitchStatementNode(_, _, _, _, label):
+            switches_dict[label] = node
+        case DefaultLabeledStatement(_, switch_label, label):
+            if not isinstance(switches_dict[switch_label], SwitchStatementNode):
+                raise SyntaxError
+            switch_node: SwitchStatementNode = switches_dict[switch_label]
+            switch_node.defaultCase = label
+        case CaseLabeledStatement(ConstantExpressionNode(val), _, switch_label, label):
+            if not isinstance(switches_dict[switch_label], SwitchStatementNode):
+                raise SyntaxError
+            switch_node: SwitchStatementNode = switches_dict[switch_label]
+            switch_node.cases.append((val, label))
+        case _:
+            pass
 
 def validate(ast: AstNode) -> "AstNode":
     s1 = resolve_variables(ast, 0, dict())
@@ -318,5 +375,10 @@ def validate(ast: AstNode) -> "AstNode":
     s2 = resolve_labels(s1, False, "", label_map)
     s3 = resolve_labels(s2, True, "", label_map)
     s4 = label_break_statements(s3, [])
-    # traverse_ast(s3, {}, lambda node: print(node))
+    traverse_ast(s4, {}, validate_prefix_and_postfix)
+    traverse_ast(s4, {}, validate_non_constant_cases)
+    traverse_ast(s4, {"cases": {}, "defaults": set()}, validate_case_uniqueness)
+    traverse_ast(s4, {}, assign_unique_labels_to_cases)
+    traverse_ast(s4, {"switches": {}}, switch_add_cases_info)
+
     return s4

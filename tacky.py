@@ -460,6 +460,7 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
                 TLabelInstruction(break_label),
             ])
             return instructions
+        
 
         case NullStatementNode():
             return []

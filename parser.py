@@ -123,7 +123,10 @@ class AstNode:
             elif isinstance(f_val, list):
                 print(indent_str + "  " + f_name + " = [")
                 for el in f_val:
-                    el.pretty_print(indent = indent + 4)
+                    if isinstance(el, AstNode):
+                        el.pretty_print(indent = indent + 4)
+                    else:
+                        print(" " * (indent + 4) + repr(el))
                 
                 print(indent_str + "  " + "]")
 
@@ -200,11 +203,13 @@ class LabeledStatement(StatementNode):
 class CaseLabeledStatement(StatementNode):
     val: "ExpressionNode"
     statement: "StatementNode"
+    switch_label: str
     label: str
 
 @dataclass
 class DefaultLabeledStatement(StatementNode):
     statement: "StatementNode"
+    switch_label: str
     label: str
 
 @dataclass
@@ -250,7 +255,8 @@ class ForStatementNode(StatementNode):
 class SwitchStatementNode(StatementNode):
     exp: "ExpressionNode"
     body: "StatementNode"
-    cases: List[Tuple["ExpressionNode", str]]
+    cases: List[Tuple[int|None, str]]
+    defaultCase: str|None
     label: str
 
 
@@ -698,18 +704,18 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementNode":
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(CloseParenthesis, tokens)
             st = ast_parse_statement(tokens)
-            return SwitchStatementNode(exp, st, [], "")
+            return SwitchStatementNode(exp, st, [], None, "")
         case Identifier("case"):
             expect_and_take(Identifier, tokens)
             val = ast_parse_exp(tokens, 0)
             expect_and_take(Colon, tokens)
             st = ast_parse_statement(tokens)
-            return CaseLabeledStatement(val, st, "")
+            return CaseLabeledStatement(val, st, "", "")
         case Identifier("default"):
             expect_and_take(Identifier, tokens)
             expect_and_take(Colon, tokens)
             st = ast_parse_statement(tokens)
-            return DefaultLabeledStatement(st, "")
+            return DefaultLabeledStatement(st, "", "")
         case Identifier(name, False) if isinstance(peek(tokens, 2), Colon):
             expect_and_take(Identifier, tokens)
             expect_and_take(Colon, tokens)

@@ -63,6 +63,8 @@ def main(argv):
     if args.codegen:
         tokens = get_tokens(text)
         ast = parse(tokens)
+        print("===PARSER==")
+        ast.pretty_print()
         v_ast = validate(ast)
         tacky_ast = t_parse_program(v_ast)
         asm_ast = tacky_parse_program(tacky_ast)
