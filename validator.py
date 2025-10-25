@@ -61,8 +61,8 @@ def resolve_variables(node: AstNode, block_id: int, variable_map: Dict[str, str]
             )
         case GotoStatement(_):
             return node
-        case LabeledStatement(_):
-            return node
+        case LabeledStatement(name, statement):
+            return LabeledStatement(name, resolve_variables(statement, block_id, variable_map))
         case CompoundStatement(block):
             return CompoundStatement(resolve_variables(block, block_id, variable_map))
         case BreakStatementNode(_):
@@ -171,41 +171,19 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
             if fname not in label_map:
                 raise SyntaxError("Unknown label!")
             return GotoStatement(label_map[fname])
-        case LabeledStatement(name):
+        case LabeledStatement(name, statement):
             if update_goto:
-                return node
+                return LabeledStatement(name, resolve_labels(statement, update_goto, func_prefix, label_map))
             fname = f"{func_prefix}.{name}"
             if fname in label_map:
                 raise SyntaxError("Duplicate labels!")
             new_name = get_label_name(fname)
             label_map[fname] = new_name
-            return LabeledStatement(new_name)
+            return LabeledStatement(new_name, resolve_labels(statement, update_goto, func_prefix, label_map))
         case CompoundStatement(block):
             return CompoundStatement(resolve_labels(block, update_goto, func_prefix, label_map))
         case _:
             return node
-
-def check_labels_have_statements(node: AstNode):
-    match node:
-        case ProgramNode(function):
-            return check_labels_have_statements(function)
-        case FunctionNode(_, block):
-            return check_labels_have_statements(block)
-        case BlockNode(block_items):
-            for i in range(len(block_items)):
-                block_item = block_items[i]
-                next_block_item = block_items[i + 1] if i < len(block_items) - 1 else None
-                match (block_item, next_block_item):
-                    case StatementBlockItemNode(LabeledStatement(_)), None:
-                        raise SyntaxError("No statements are labeled")
-                    case StatementBlockItemNode(LabeledStatement(_)), DeclarationBlockItemNode(_):
-                        raise SyntaxError("no labels for declarations")
-                    case StatementBlockItemNode(CompoundStatement(block)), _:
-                        check_labels_have_statements(block)
-                    case _:
-                        pass
-        case _:
-            raise SyntaxError
 
 # def traverse_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Optional[AstNode]]) -> AstNode:
 #     processed = func(node, params)
@@ -249,8 +227,10 @@ def label_break_statements(node: AstNode, labels: List["str"]) -> AstNode:
             return BlockNode(n_items)
         
         # Statements
-        case ReturnStatementNode(_) | ExpressionStatementNode(_) | LabeledStatement(_) | GotoStatement(_) | NullStatementNode():
+        case ReturnStatementNode(_) | ExpressionStatementNode(_) | GotoStatement(_) | NullStatementNode():
             return node
+        case LabeledStatement(name, statement):
+            return LabeledStatement(name, label_break_statements(statement, labels))
         case IfStatementNode(cond, then_st, else_st):
             n_then_st = label_break_statements(then_st, labels)
             n_else_st = label_break_statements(else_st, labels) if else_st else None
@@ -287,7 +267,6 @@ def validate(ast: AstNode) -> "AstNode":
     label_map = dict()
     s2 = resolve_labels(s1, False, "", label_map)
     s3 = resolve_labels(s2, True, "", label_map)
-    check_labels_have_statements(s3)
     s4 = label_break_statements(s3, [])
     # traverse_ast(s3, {}, lambda node: print(node))
     return s4

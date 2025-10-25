@@ -380,10 +380,10 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             return [
                 TJumpInstruction(label)
             ]
-        case LabeledStatement(name):
+        case LabeledStatement(name, st):
             return [
                 TLabelInstruction(name)
-            ]
+            ] + t_parse_statement(st)
         case CompoundStatement(BlockNode(items)):
             return t_parse_block_items(items)
         

@@ -194,6 +194,7 @@ class IfStatementNode(StatementNode):
 @dataclass
 class LabeledStatement(StatementNode):
     name: str
+    statement: "StatementNode"
 
 @dataclass
 class GotoStatement(StatementNode):
@@ -677,7 +678,8 @@ def ast_parse_statement(tokens: List["Token"]) -> "StatementNode":
         case Identifier(name, False) if isinstance(peek(tokens, 2), Colon):
             expect_and_take(Identifier, tokens)
             expect_and_take(Colon, tokens)
-            return LabeledStatement(name)
+            st = ast_parse_statement(tokens)
+            return LabeledStatement(name, st)
         case Identifier("break", True):
             expect_and_take(Identifier, tokens)
             expect_and_take(Semicolon, tokens)
