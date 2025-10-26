@@ -10,140 +10,187 @@ def get_block_id():
     block_counter += 1
     return block_counter
 
+@dataclass
+class IdentifierMapEntry:
+    new_name: str
+    block_id: bool
+    has_linkage: bool
 
-def resolve_variables(node: AstNode, block_id: int, variable_map: Dict[str, str]) -> AstNode:
+def resolve_param(param: str, block_id: int, identifier_map: Dict[str, IdentifierMapEntry]) -> str:
+    if param in identifier_map and identifier_map[param].block_id == block_id:
+        raise SyntaxError("Duplicate variable declaration!")
+    param_resolved = get_temp_var_name(param)
+    identifier_map[param] = IdentifierMapEntry(param_resolved, block_id, False)
+    return param_resolved
+
+def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str, IdentifierMapEntry]) -> AstNode:
     if node is None:
         return None
 
     match node:
         # Top level
-        case ProgramNode(f_node):
-            f_node_resolved = resolve_variables(f_node, block_id, variable_map)
-            p_node = ProgramNode(f_node_resolved)
+        case ProgramNode(fun_decls):
+            new_fun_decls = []
+            for fun_decl in fun_decls:
+                f_decl_resolved = identifier_resolution(fun_decl, block_id, identifier_map)
+            new_fun_decls.append(f_decl_resolved)
+            p_node = ProgramNode(new_fun_decls)
             return p_node
-        case FunctionDeclarationNode(name, BlockNode(block_items)):
-            block_items_resolved = []
-            for bi in block_items:
-                block_items_resolved.append(resolve_variables(bi, block_id, variable_map))
-            f_node = FunctionDeclarationNode(name, BlockNode(block_items_resolved))
-            return f_node
+        
+        # Declarations
+        case FunctionDeclarationNode(name, params, body):
+            new_block_id = get_block_id()
+            if name in identifier_map:
+                prev_entry = identifier_map[name]
+                if prev_entry.block_id == block_id and (not prev_entry.has_linkage):
+                    raise SyntaxError("Duplicate declaration!")
+            identifier_map[name] = IdentifierMapEntry(name, block_id, True)
+            
+            inner_map = identifier_map.copy()
+            new_params = []
+            for param in params:
+                new_params.append(resolve_param(param, new_block_id, inner_map))
+            
+            new_body: BlockNode|None = None
+            if body is not None and block_id > 0:
+                raise SyntaxError("Illegal function definition!")
+            if body is not None:
+                body_items = body.items
+                new_body_items = []
+                for body_item in body_items:
+                    new_body_item = identifier_resolution(body_item, new_block_id, inner_map)
+                    new_body_items.append(new_body_item)
+                new_body = BlockNode(new_body_items)
+            return FunctionDeclarationNode(name, new_params, new_body)
         case VariableDeclarationNode(name, exp):
-            if name in variable_map and variable_map[name][1] == block_id:
-                raise SyntaxError("Duplicate variable declaration!")
-            name_resolved = get_temp_var_name(name)
-            variable_map[name] = (name_resolved, block_id)
-            d_node = VariableDeclarationNode(name_resolved, resolve_variables(exp, block_id, variable_map))
+            new_name = resolve_param(name, block_id, identifier_map)
+            # if name in identifier_map and identifier_map[name].block_id == block_id:
+            #     raise SyntaxError("Duplicate variable declaration!")
+            # name_resolved = get_temp_var_name(name)
+            # identifier_map[name] = IdentifierMapEntry(name_resolved, block_id, False)
+            d_node = VariableDeclarationNode(new_name, identifier_resolution(exp, block_id, identifier_map))
             return d_node
+        
+        
+        # Blocks
         case BlockNode(items):
             new_block_id = get_block_id()
-            variable_map_copy = variable_map.copy()
-            items = [resolve_variables(item, new_block_id, variable_map_copy) for item in items]
+            variable_map_copy = identifier_map.copy()
+            items = [identifier_resolution(item, new_block_id, variable_map_copy) for item in items]
             return BlockNode(items)
         
-        # Block item nodes
         case StatementBlockItemNode(statement):
-            return StatementBlockItemNode(resolve_variables(statement, block_id, variable_map))
+            return StatementBlockItemNode(identifier_resolution(statement, block_id, identifier_map))
         case DeclarationBlockItemNode(declaration):
-            return DeclarationBlockItemNode(resolve_variables(declaration, block_id, variable_map))
+            return DeclarationBlockItemNode(identifier_resolution(declaration, block_id, identifier_map))
         
         # Statements
         case NullStatementNode():
             return node
         case ReturnStatementNode(exp):
-            return ReturnStatementNode(resolve_variables(exp, block_id, variable_map))
+            return ReturnStatementNode(identifier_resolution(exp, block_id, identifier_map))
         case ExpressionStatementNode(exp):
-            return ExpressionStatementNode(resolve_variables(exp, block_id, variable_map))
+            return ExpressionStatementNode(identifier_resolution(exp, block_id, identifier_map))
         case IfStatementNode(cond, then_exp, else_exp):
             return IfStatementNode(
-                resolve_variables(cond, block_id, variable_map),
-                resolve_variables(then_exp, block_id, variable_map),
-                resolve_variables(else_exp, block_id, variable_map)
+                identifier_resolution(cond, block_id, identifier_map),
+                identifier_resolution(then_exp, block_id, identifier_map),
+                identifier_resolution(else_exp, block_id, identifier_map)
             )
         case GotoStatement(_):
             return node
         case LabeledStatement(name, statement):
-            return LabeledStatement(name, resolve_variables(statement, block_id, variable_map))
+            return LabeledStatement(name, identifier_resolution(statement, block_id, identifier_map))
         case CompoundStatement(block):
-            return CompoundStatement(resolve_variables(block, block_id, variable_map))
+            return CompoundStatement(identifier_resolution(block, block_id, identifier_map))
         case BreakStatementNode(_):
             return node
         case ContinueStatementNode(_):
             return node
         
         case WhileStatementNode(cond, body, label):
-            n_cond = resolve_variables(cond, block_id, variable_map)
-            n_body = resolve_variables(body, block_id, variable_map)
+            n_cond = identifier_resolution(cond, block_id, identifier_map)
+            n_body = identifier_resolution(body, block_id, identifier_map)
             return WhileStatementNode(n_cond, n_body, label)
         case DoWhileStatementNode(body, cond, label):
-            n_cond = resolve_variables(cond, block_id, variable_map)
-            n_body = resolve_variables(body, block_id, variable_map)
+            n_cond = identifier_resolution(cond, block_id, identifier_map)
+            n_body = identifier_resolution(body, block_id, identifier_map)
             return DoWhileStatementNode(n_body, n_cond, label)
         case ForStatementNode(init, cond, post, body, label):
             new_block_id = get_block_id()
-            new_variable_map = variable_map.copy()
-            n_init = resolve_variables(init, new_block_id, new_variable_map)
-            n_cond = resolve_variables(cond, new_block_id, new_variable_map) if cond else None
-            n_post = resolve_variables(post, new_block_id, new_variable_map) if post else None
-            n_body = resolve_variables(body, new_block_id, new_variable_map)
+            new_variable_map = identifier_map.copy()
+            n_init = identifier_resolution(init, new_block_id, new_variable_map)
+            n_cond = identifier_resolution(cond, new_block_id, new_variable_map) if cond else None
+            n_post = identifier_resolution(post, new_block_id, new_variable_map) if post else None
+            n_body = identifier_resolution(body, new_block_id, new_variable_map)
             return ForStatementNode(n_init, n_cond, n_post, n_body, label)
         case ForInitDeclarationNode(decl):
-            n_decl = resolve_variables(decl, block_id, variable_map)
+            n_decl = identifier_resolution(decl, block_id, identifier_map)
             return ForInitDeclarationNode(n_decl)
         case ForInitExpressionNode(exp):
-            n_exp = resolve_variables(exp, block_id, variable_map)
+            n_exp = identifier_resolution(exp, block_id, identifier_map)
             return ForInitExpressionNode(n_exp)
         case SwitchStatementNode(exp, body, cases, defaultCase, label):
-            n_exp = resolve_variables(exp, block_id, variable_map)
-            n_body = resolve_variables(body, block_id, variable_map)
+            n_exp = identifier_resolution(exp, block_id, identifier_map)
+            n_body = identifier_resolution(body, block_id, identifier_map)
             return SwitchStatementNode(n_exp, n_body, cases, defaultCase, label)
         case CaseLabeledStatement(val, st, switch_label, label):
             # val has to be a constant expression so we don't resolve variables for it
-            n_st = resolve_variables(st, block_id, variable_map)
+            n_st = identifier_resolution(st, block_id, identifier_map)
             return CaseLabeledStatement(val, n_st, switch_label, label)
         case DefaultLabeledStatement(st, switch_label, label):
-            n_st = resolve_variables(st, block_id, variable_map)
+            n_st = identifier_resolution(st, block_id, identifier_map)
             return DefaultLabeledStatement(n_st, switch_label, label)
 
         # Expressions
         case ConstantExpressionNode(_):
             return node
         case UnaryExpressionNode(unop, exp):
-            return UnaryExpressionNode(unop, resolve_variables(exp, block_id, variable_map))
+            return UnaryExpressionNode(unop, identifier_resolution(exp, block_id, identifier_map))
         case BinaryExpressionNode(binop, exp1, exp2):
             return BinaryExpressionNode(
                 binop,
-                resolve_variables(exp1, block_id, variable_map),
-                resolve_variables(exp2, block_id, variable_map)
+                identifier_resolution(exp1, block_id, identifier_map),
+                identifier_resolution(exp2, block_id, identifier_map)
             )
         case PrefixExpressionNode(op, exp):
-            return PrefixExpressionNode(op, resolve_variables(exp, block_id, variable_map))
+            return PrefixExpressionNode(op, identifier_resolution(exp, block_id, identifier_map))
         case PostfixExpressionNode(op, exp):
-            return PostfixExpressionNode(op, resolve_variables(exp, block_id, variable_map))
+            return PostfixExpressionNode(op, identifier_resolution(exp, block_id, identifier_map))
         case VariableExpressionNode(name):
-            if not name in variable_map:
+            if not name in identifier_map:
                 raise SyntaxError("Undeclared variable!")
-            return VariableExpressionNode(variable_map[name][0])
+            return VariableExpressionNode(identifier_map[name].new_name)
         case AssignmentExpressionNode(lhs, rhs):
             if not isinstance(lhs, VariableExpressionNode):
                 raise SyntaxError("Invalid lvalue!")
             return AssignmentExpressionNode(
-                resolve_variables(lhs, block_id, variable_map),
-                resolve_variables(rhs, block_id, variable_map)
+                identifier_resolution(lhs, block_id, identifier_map),
+                identifier_resolution(rhs, block_id, identifier_map)
             )
         case CompoundAssignmentExpressionNode(binop, lhs, rhs):
             if not isinstance(lhs, VariableExpressionNode):
                 raise SyntaxError("Invalid lvalue!")
             return CompoundAssignmentExpressionNode(
                 binop,
-                resolve_variables(lhs, block_id, variable_map),
-                resolve_variables(rhs, block_id, variable_map)
+                identifier_resolution(lhs, block_id, identifier_map),
+                identifier_resolution(rhs, block_id, identifier_map)
             )
         case ConditionalExpressionNode(cond, true_exp, false_exp):
             return ConditionalExpressionNode(
-                resolve_variables(cond, block_id, variable_map),
-                resolve_variables(true_exp, block_id, variable_map),
-                resolve_variables(false_exp, block_id, variable_map)
+                identifier_resolution(cond, block_id, identifier_map),
+                identifier_resolution(true_exp, block_id, identifier_map),
+                identifier_resolution(false_exp, block_id, identifier_map)
             )
+        case FunctionCallExpressionNode(name, args):
+            if name in identifier_map:
+                new_name = identifier_map[name].new_name
+                new_args = []
+                for arg in args:
+                    new_args.append(identifier_resolution(arg, block_id, identifier_map))
+                return FunctionCallExpressionNode(new_name, new_args)
+            else:
+                raise SyntaxError("Undeclared function!")
         case _:
             raise SyntaxError("Unknown AST node!")
 
@@ -231,7 +278,7 @@ def process_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Opt
 
 def traverse_ast(node: AstNode, params: dict, before: Callable[[AstNode, dict], None], after: Callable[[AstNode, dict], None]):
     if before:
-        before(ch_node, params)
+        before(node, params)
     fs = vars(node)
     for _, ch_node in list(fs.items()):
         if isinstance(ch_node, AstNode):
@@ -239,20 +286,23 @@ def traverse_ast(node: AstNode, params: dict, before: Callable[[AstNode, dict], 
         elif isinstance(ch_node, (list, tuple, set)):
             for el in ch_node:
                 if isinstance(el, AstNode):
-                    traverse_ast(ch_node, params, before, after)
+                    traverse_ast(el, params, before, after)
     if after:
-        after(ch_node, params)
+        after(node, params)
 
 
 def label_break_and_continue_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> AstNode:   
     match node:
         # Top Level
-        case ProgramNode(func):
-            n_func = label_break_and_continue_statements(func, labels)
-            return ProgramNode(n_func)
-        case FunctionDeclarationNode(name, body):
+        case ProgramNode(fun_decls):
+            new_fun_decls = []
+            for fun_decl in fun_decls:
+                new_fun_decl = label_break_and_continue_statements(fun_decl, labels)
+                new_fun_decls.append(new_fun_decl)
+            return ProgramNode(new_fun_decls)
+        case FunctionDeclarationNode(name, params, body):
             n_body = label_break_and_continue_statements(body, labels)
-            return FunctionDeclarationNode(name, n_body)
+            return FunctionDeclarationNode(name, params, n_body)
         case VariableDeclarationNode(_, _):
             return node
         
@@ -384,7 +434,7 @@ def switch_add_cases_info(node: AstNode, params: dict):
             pass
 
 def validate(ast: AstNode) -> "AstNode":
-    s1 = resolve_variables(ast, 0, dict())
+    s1 = identifier_resolution(ast, 0, dict())
     label_map = dict()
     s2 = resolve_labels(s1, False, "", label_map)
     s3 = resolve_labels(s2, True, "", label_map)

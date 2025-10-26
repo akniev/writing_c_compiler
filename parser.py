@@ -423,7 +423,7 @@ class ConditionalExpressionNode(ExpressionNode):
 
 @dataclass
 class FunctionCallExpressionNode(ExpressionNode):
-    identifier: str
+    name: str
     args: List["ExpressionNode"]
 
 
