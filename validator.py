@@ -214,21 +214,35 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
         case _:
             return node
 
-def traverse_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Optional[AstNode]]) -> AstNode:
+def process_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Optional[AstNode]]) -> AstNode:
     processed = func(node, params)
     result = processed if processed is not None else node
     fs = vars(result)
 
-    for f_name in fs.keys():
-        f_val = fs[f_name]
+    for f_name, f_val in list(fs.items()):
         if isinstance(f_val, AstNode):
-            fs[f_name] = traverse_ast(f_val, params, func)
+            fs[f_name] = process_ast(f_val, params, func)
         elif isinstance(f_val, list):
             for el in f_val:
                 if isinstance(el, AstNode):
-                    traverse_ast(el, params, func)
+                    process_ast(el, params, func)
 
     return result
+
+def traverse_ast(node: AstNode, params: dict, before: Callable[[AstNode, dict], None], after: Callable[[AstNode, dict], None]):
+    if before:
+        before(ch_node, params)
+    fs = vars(node)
+    for _, ch_node in list(fs.items()):
+        if isinstance(ch_node, AstNode):
+            traverse_ast(ch_node, params, before, after)
+        elif isinstance(ch_node, (list, tuple, set)):
+            for el in ch_node:
+                if isinstance(el, AstNode):
+                    traverse_ast(ch_node, params, before, after)
+    if after:
+        after(ch_node, params)
+
 
 def label_break_and_continue_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> AstNode:   
     match node:
@@ -375,10 +389,10 @@ def validate(ast: AstNode) -> "AstNode":
     s2 = resolve_labels(s1, False, "", label_map)
     s3 = resolve_labels(s2, True, "", label_map)
     s4 = label_break_and_continue_statements(s3, [])
-    traverse_ast(s4, {}, validate_prefix_and_postfix)
-    traverse_ast(s4, {}, validate_non_constant_cases)
-    traverse_ast(s4, {"cases": {}, "defaults": set()}, validate_case_uniqueness)
-    traverse_ast(s4, {}, assign_unique_labels_to_cases)
-    traverse_ast(s4, {"switches": {}}, switch_add_cases_info)
+    traverse_ast(s4, {}, validate_prefix_and_postfix, None)
+    traverse_ast(s4, {}, validate_non_constant_cases, None)
+    traverse_ast(s4, {"cases": {}, "defaults": set()}, validate_case_uniqueness, None)
+    traverse_ast(s4, {}, assign_unique_labels_to_cases, None)
+    traverse_ast(s4, {"switches": {}}, switch_add_cases_info, None)
 
     return s4
