@@ -43,7 +43,7 @@ label_counter = 0
 
 @dataclass
 class TProgram(TackyNode):
-    function: "TFunction"
+    functions: List["TFunction"]
 
 
 @dataclass
@@ -101,6 +101,12 @@ class TJumpIfNotZeroInstruction(TInstruction):
 @dataclass
 class TLabelInstruction(TInstruction):
     value: str
+
+@dataclass
+class TFunctionCall(TInstruction):
+    name: str
+    args: List["TValue"]
+    dst: "TValue"
 
 
 
@@ -200,8 +206,13 @@ class TGreaterOrEqualOperator(TBinaryOperator):
 
 
 def t_parse_program(pnode: ProgramNode) -> TProgram:
-    tfunc = t_parse_function(pnode.function)
-    return TProgram(tfunc)
+    t_functions = []
+    for f in pnode.function_declarations:
+        if not f.body:
+            continue
+        t_func = t_parse_function(f)
+        t_functions.append(t_func)
+    return TProgram(t_functions)
 
 
 def t_parse_function(fnode: FunctionDeclarationNode) -> TFunction:
@@ -215,12 +226,27 @@ def t_parse_block_item(b_item: "BlockItemNode") -> List["TInstruction"]:
         case StatementBlockItemNode(s_node):
             return t_parse_statement(s_node)
         case DeclarationBlockItemNode(d_node):
-            return t_parse_declaration(d_node)
+            return t_parse_declaration(d_node) # t_parse_variable_declaration(d_node)
         case _:
             raise SyntaxError
 
 
-def t_parse_declaration(d_node: VariableDeclarationNode) -> List["TInstruction"]:
+def t_parse_declaration(node: DeclarationNode):
+    match node:
+        case VariableDeclarationNode(_, _):
+            return t_parse_variable_declaration(node)
+        case FunctionDeclarationNode(_, _, _):
+            return t_parse_function_declaration(node)
+        case _:
+            raise SyntaxError("Unknown declaration type!")
+        
+def t_parse_function_declaration(node: FunctionDeclarationNode) -> List["TInstruction"]:
+    if not node.body:
+        return []
+    raise SyntaxError("Unexpected function definition!")
+
+
+def t_parse_variable_declaration(d_node: VariableDeclarationNode) -> List["TInstruction"]:
     instructions = []
     if d_node.init is None:
         return []
@@ -636,5 +662,13 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             return t_parse_postfix_exp(op, exp, instructions)
         case ConditionalExpressionNode(cond, true_exp, false_exp):
             return t_parse_cond_exp(cond, true_exp, false_exp, instructions)
+        case FunctionCallExpressionNode(name, args):
+            values = []
+            for arg in args:
+                v = t_parse_expression(arg, instructions)
+                values.append(v)
+            result = TVariable(get_temp_var_name("fun"))
+            instructions.append(TFunctionCall(name, values, result))
+            return result
         case _:
             raise SyntaxError
