@@ -204,7 +204,7 @@ def t_parse_program(pnode: ProgramNode) -> TProgram:
     return TProgram(tfunc)
 
 
-def t_parse_function(fnode: FunctionNode) -> TFunction:
+def t_parse_function(fnode: FunctionDeclarationNode) -> TFunction:
     fname = fnode.name
     finstructions = t_parse_block_items(fnode.body.items)
     finstructions.append(TReturnInstruction(TConstant(0)))
@@ -220,7 +220,7 @@ def t_parse_block_item(b_item: "BlockItemNode") -> List["TInstruction"]:
             raise SyntaxError
 
 
-def t_parse_declaration(d_node: DeclarationNode) -> List["TInstruction"]:
+def t_parse_declaration(d_node: VariableDeclarationNode) -> List["TInstruction"]:
     instructions = []
     if d_node.init is None:
         return []
@@ -358,7 +358,7 @@ def t_parse_if(cond: "ExpressionNode",
 
 def t_parse_for_loop_init(init: "ForInitNode", instructions: List["TInstruction"]):
     match init:
-        case ForInitDeclarationNode(DeclarationNode(name, exp)):
+        case ForInitDeclarationNode(VariableDeclarationNode(name, exp)):
             assignment_exp = AssignmentExpressionNode(VariableExpressionNode(name), exp)
             t_parse_expression(assignment_exp, instructions)
         case ForInitExpressionNode(exp):

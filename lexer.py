@@ -337,6 +337,15 @@ class TwoMinuses(Token):
     def from_match(cls, m):
         return cls()
 
+# Punctuation
+
+class Comma(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"\,")
+
+    @classmethod
+    def from_match(cls, m):
+        return cls()
+
 
 
 
@@ -385,6 +394,7 @@ TOKENS: List["Token"] = [
     TwoMinuses,
     QuestionMark,
     Colon,
+    Comma,
 ]
 WHITESPACE = re.compile(r"\s*")
 

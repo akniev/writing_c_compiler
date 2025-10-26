@@ -140,19 +140,25 @@ class AstNode:
 
 @dataclass
 class ProgramNode(AstNode):
-    function: "FunctionNode"
+    function_declarations: List["FunctionDeclarationNode"]
 
-@dataclass
-class FunctionNode(AstNode):
-    name: str
-    body: "BlockNode"
 
-@dataclass
+
+# Declaration
+
 class DeclarationNode(AstNode):
+    pass
+
+@dataclass
+class VariableDeclarationNode(DeclarationNode):
     name: str
     init: Optional["ExpressionNode"]
 
-
+@dataclass
+class FunctionDeclarationNode(AstNode):
+    name: str
+    params: List[str]
+    body: Optional["BlockNode"]
 
 
 # Block items
@@ -268,7 +274,7 @@ class ForInitNode(AstNode):
 
 @dataclass
 class ForInitDeclarationNode(ForInitNode):
-    declaration: "DeclarationNode"
+    declaration: "VariableDeclarationNode"
 
 @dataclass
 class ForInitExpressionNode(ForInitNode):
@@ -415,6 +421,11 @@ class ConditionalExpressionNode(ExpressionNode):
     true_exp: "ExpressionNode"
     false_exp: "ExpressionNode"
 
+@dataclass
+class FunctionCallExpressionNode(ExpressionNode):
+    identifier: str
+    args: List["ExpressionNode"]
+
 
 
 
@@ -432,6 +443,16 @@ def expect_and_take_identifier(name: str, is_keyword: bool, tokens: List["Token"
     if t.name != name or t.is_keyword != is_keyword:
         raise SyntaxError("Wrong identifier!")
     return t
+
+def check_identifier(name: str, is_keyword: bool, token: Token|None) -> bool:
+    if token is None:
+        return False
+    if not isinstance(token, Identifier):
+        return False
+    t: Identifier = token
+    if t.is_keyword != is_keyword or t.name != name:
+        return False
+    return True
 
 def take_token(tokens: List["Token"]) -> "Token":
     return tokens.pop(0)
@@ -577,6 +598,23 @@ def ast_parse_conditional_middle(tokens: List["Token"]) -> "ExpressionNode":
     expect_and_take(Colon, tokens)
     return exp
 
+def ast_parse_function_call(tokens: List["Token"]) -> "FunctionCallExpressionNode":
+    f_identifier: Identifier = expect_and_take(Identifier, tokens)
+    f_name = f_identifier.name
+    f_args = []
+    expect_and_take(OpenParenthesis, tokens)
+    if not isinstance(peek(tokens), CloseParenthesis):
+        e = ast_parse_exp(tokens, 0)
+        f_args.append(e)
+        while not isinstance(peek(tokens), CloseParenthesis):
+            expect_and_take(Comma, tokens)
+            e = ast_parse_exp(tokens, 0)
+            f_args.append(e)
+    
+    expect_and_take(CloseParenthesis, tokens)
+
+    return FunctionCallExpressionNode(f_name, f_args)
+
 def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
     token = peek(tokens)
     if token is None:
@@ -585,6 +623,8 @@ def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
     if isinstance(token, Constant):
         s_const: "Constant" = expect_and_take(Constant, tokens)
         return ConstantExpressionNode(s_const.value)
+    elif isinstance(token, Identifier) and isinstance(peek(tokens, 2), OpenParenthesis):
+        return ast_parse_function_call(tokens)
     elif isinstance(token, Identifier):
         t: Identifier = token
         if t.is_keyword:
@@ -617,18 +657,24 @@ def ast_parse_block_item(tokens: List["Token"]) -> "BlockItemNode":
             return StatementBlockItemNode(ast_parse_statement(tokens))
 
 def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationNode":
+    if isinstance(peek(tokens, 3), OpenParenthesis):
+        return ast_parse_function_declaration(tokens)
+    else:
+        return ast_parse_variable_declaration(tokens)
+
+def ast_parse_variable_declaration(tokens: List["Token"]) -> "VariableDeclarationNode":
     expect_and_take_identifier("int", True, tokens)
     decl_identifier: Identifier = expect_and_take(Identifier, tokens)
     if decl_identifier.is_keyword:
         raise SyntaxError
     t = peek(tokens)
     if isinstance(t, Semicolon):
-        decl = DeclarationNode(decl_identifier.name, None)
+        decl = VariableDeclarationNode(decl_identifier.name, None)
         expect_and_take(Semicolon, tokens)
         return decl
     expect_and_take(EqualSign, tokens)
     exp = ast_parse_exp(tokens, 0)
-    decl = DeclarationNode(decl_identifier.name, exp)
+    decl = VariableDeclarationNode(decl_identifier.name, exp)
     expect_and_take(Semicolon, tokens)
     return decl
 
@@ -659,7 +705,7 @@ def ast_parse_for_init(tokens: List["Token"]) -> Optional["ForInitNode"]:
             expect_and_take(Semicolon, tokens)
             return None
         case Identifier("int", True):
-            return ForInitDeclarationNode(ast_parse_declaration(tokens))
+            return ForInitDeclarationNode(ast_parse_variable_declaration(tokens))
         case _:
             exp = ast_parse_exp(tokens, 0)
             expect_and_take(Semicolon, tokens)
@@ -792,41 +838,53 @@ def ast_parse_block(tokens: List["Token"]) -> "BlockNode":
     return BlockNode(block_items)
 
 
-def ast_parse_function(tokens: List["Token"]) -> "FunctionNode":
-    expect(Identifier, tokens)
-    f_type: "Identifier" = take_token(tokens)
-    if not f_type.is_keyword:
-        raise SyntaxError
-    if f_type.name != "int":
-        raise SyntaxError
+def ast_parse_function_declaration(tokens: List["Token"]) -> "FunctionDeclarationNode":
+    expect_and_take_identifier("int", True, tokens)
     
     expect(Identifier, tokens)
     f_name: "Identifier" = take_token(tokens)
 
+    if f_name.is_keyword:
+        raise SyntaxError
+
     expect_and_take(OpenParenthesis, tokens)
 
-    expect(Identifier, tokens)
-    f_args: "Identifier" = take_token(tokens)
-    if not f_args.is_keyword:
-        raise SyntaxError
-    if f_args.name != "void":
-        raise SyntaxError
-    
+    param_list = None
+
+    if check_identifier("void", True, peek(tokens)):
+        expect_and_take(Identifier, tokens)
+        param_list = []
+    else:
+        expect_and_take_identifier("int", True, tokens)
+        p: Identifier = expect_and_take(Identifier, tokens)
+        param_list = [p.name]
+        while not isinstance(peek(tokens), CloseParenthesis):
+            expect_and_take(Comma, tokens)
+            expect_and_take_identifier("int", True, tokens)
+            p: Identifier = expect_and_take(Identifier, tokens)
+            param_list.append(p.name)
+            
     expect_and_take(CloseParenthesis, tokens)
 
-    f_body = ast_parse_block(tokens)
+    f_body = None
 
-    return FunctionNode(f_name.name, f_body)
+    if not isinstance(peek(tokens), Semicolon):
+        f_body = ast_parse_block(tokens)
+    else:
+        expect_and_take(Semicolon, tokens)
+
+    return FunctionDeclarationNode(f_name.name, param_list, f_body)
 
 
-def parse_program(tokens: List["Token"]) -> "ProgramNode":
-    func = ast_parse_function(tokens)
+def ast_parse_program(tokens: List["Token"]) -> "ProgramNode":
+    function_declarations = []
 
-    if len(tokens) > 0:
-        raise SyntaxError
+    while tokens:
+        func = ast_parse_function_declaration(tokens)
+        function_declarations.append(func)
 
-    p_node = ProgramNode(func)
+    p_node = ProgramNode(function_declarations)
     return p_node
 
 def parse(tokens: List["Token"]) -> "ProgramNode":
-    return parse_program(tokens)
+    return ast_parse_program(tokens)

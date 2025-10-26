@@ -253,13 +253,13 @@ def ast_parse_return(s: ReturnStatementNode) -> List["AsmInstruction"]:
         AsmRet()
     ]
 
-def ast_parse_function(f: FunctionNode) -> AsmFunction:
+def ast_parse_function_declaration(f: FunctionDeclarationNode) -> AsmFunction:
     f_name = f.name
     f_insts = ast_parse_return(f.body)
     return AsmFunction(f_name, f_insts)
 
 def ast_parse_asm(ast: ProgramNode) -> AsmProgram:
-    f_fun = ast_parse_function(ast.function)
+    f_fun = ast_parse_function_declaration(ast.function)
     return AsmProgram(f_fun)
 
 

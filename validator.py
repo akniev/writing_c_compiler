@@ -21,18 +21,18 @@ def resolve_variables(node: AstNode, block_id: int, variable_map: Dict[str, str]
             f_node_resolved = resolve_variables(f_node, block_id, variable_map)
             p_node = ProgramNode(f_node_resolved)
             return p_node
-        case FunctionNode(name, BlockNode(block_items)):
+        case FunctionDeclarationNode(name, BlockNode(block_items)):
             block_items_resolved = []
             for bi in block_items:
                 block_items_resolved.append(resolve_variables(bi, block_id, variable_map))
-            f_node = FunctionNode(name, BlockNode(block_items_resolved))
+            f_node = FunctionDeclarationNode(name, BlockNode(block_items_resolved))
             return f_node
-        case DeclarationNode(name, exp):
+        case VariableDeclarationNode(name, exp):
             if name in variable_map and variable_map[name][1] == block_id:
                 raise SyntaxError("Duplicate variable declaration!")
             name_resolved = get_temp_var_name(name)
             variable_map[name] = (name_resolved, block_id)
-            d_node = DeclarationNode(name_resolved, resolve_variables(exp, block_id, variable_map))
+            d_node = VariableDeclarationNode(name_resolved, resolve_variables(exp, block_id, variable_map))
             return d_node
         case BlockNode(items):
             new_block_id = get_block_id()
@@ -157,8 +157,8 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
             f_node_resolved = resolve_labels(f_node, update_goto, func_prefix, label_map)
             p_node = ProgramNode(f_node_resolved)
             return p_node
-        case FunctionNode(name, block):
-            return FunctionNode(name, resolve_labels(block, update_goto, func_prefix, label_map))
+        case FunctionDeclarationNode(name, block):
+            return FunctionDeclarationNode(name, resolve_labels(block, update_goto, func_prefix, label_map))
         case BlockNode(block_items):
             block_items_resolved = []
             for bi in block_items:
@@ -236,10 +236,10 @@ def label_break_and_continue_statements(node: AstNode, labels: List[Tuple["str",
         case ProgramNode(func):
             n_func = label_break_and_continue_statements(func, labels)
             return ProgramNode(n_func)
-        case FunctionNode(name, body):
+        case FunctionDeclarationNode(name, body):
             n_body = label_break_and_continue_statements(body, labels)
-            return FunctionNode(name, n_body)
-        case DeclarationNode(_, _):
+            return FunctionDeclarationNode(name, n_body)
+        case VariableDeclarationNode(_, _):
             return node
         
         # Block Items
