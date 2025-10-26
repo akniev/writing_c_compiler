@@ -384,6 +384,14 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             return [
                 TLabelInstruction(name)
             ] + t_parse_statement(st)
+        case CaseLabeledStatement(_, st, _, label):
+            return [
+                TLabelInstruction(label)
+            ] + t_parse_statement(st)
+        case DefaultLabeledStatement(st, _, label):
+            return [
+                TLabelInstruction(label)
+            ] + t_parse_statement(st)
         case CompoundStatement(BlockNode(items)):
             return t_parse_block_items(items)
         
@@ -461,6 +469,30 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
             ])
             return instructions
         
+        case SwitchStatementNode(exp, body, cases, defaultCase, label):
+            instructions = []
+
+            break_label = get_label_name(f"{label}.break")
+            exp_result = t_parse_expression(exp, instructions)
+
+            tmp_var = get_temp_var_name()
+            for c in cases:
+                c_val = c[0]
+                c_label = c[1]
+                instructions.extend([
+                    TBinaryInstruction(TSubtractionOperator(), exp_result, TConstant(c_val), TVariable(tmp_var)),
+                    TJumpIfZeroInstruction(tmp_var, c_label),
+                ])
+            instructions.extend([
+                TJumpInstruction(defaultCase if defaultCase else break_label)
+            ])
+
+            instructions.extend(t_parse_statement(body))
+            instructions.extend([
+                TLabelInstruction(break_label),
+            ])
+
+            return instructions
 
         case NullStatementNode():
             return []
