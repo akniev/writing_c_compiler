@@ -33,7 +33,7 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
             new_fun_decls = []
             for fun_decl in fun_decls:
                 f_decl_resolved = identifier_resolution(fun_decl, block_id, identifier_map)
-            new_fun_decls.append(f_decl_resolved)
+                new_fun_decls.append(f_decl_resolved)
             p_node = ProgramNode(new_fun_decls)
             return p_node
         
@@ -200,12 +200,15 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
 
     match node:
         # Top level
-        case ProgramNode(f_node):
-            f_node_resolved = resolve_labels(f_node, update_goto, func_prefix, label_map)
-            p_node = ProgramNode(f_node_resolved)
+        case ProgramNode(function_declarations):
+            resolved_function_declarations = []
+            for fdecl in function_declarations:
+                f_node_resolved = resolve_labels(fdecl, update_goto, func_prefix, label_map)
+                resolved_function_declarations.append(f_node_resolved)
+            p_node = ProgramNode(resolved_function_declarations)
             return p_node
-        case FunctionDeclarationNode(name, block):
-            return FunctionDeclarationNode(name, resolve_labels(block, update_goto, func_prefix, label_map))
+        case FunctionDeclarationNode(name, params, block):
+            return FunctionDeclarationNode(name, params, resolve_labels(block, update_goto, func_prefix, label_map))
         case BlockNode(block_items):
             block_items_resolved = []
             for bi in block_items:
@@ -261,22 +264,26 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
         case _:
             return node
 
-def process_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Optional[AstNode]]) -> AstNode:
-    processed = func(node, params)
+type AstCallback = Callable[[AstNode, dict], None]
+type AstProcessor = Callable[[AstNode, dict], Optional[AstNode]]
+
+def process_ast(node: AstNode, params: dict, modify: AstProcessor, before: AstCallback, after: AstCallback) -> AstNode:
+    before(node, params)
+    processed = modify(node, params)
     result = processed if processed is not None else node
     fs = vars(result)
 
     for f_name, f_val in list(fs.items()):
         if isinstance(f_val, AstNode):
-            fs[f_name] = process_ast(f_val, params, func)
-        elif isinstance(f_val, list):
+            fs[f_name] = process_ast(f_val, params, modify, before, after)
+        elif isinstance(f_val, (list, tuple, set)):
             for el in f_val:
                 if isinstance(el, AstNode):
-                    process_ast(el, params, func)
-
+                    process_ast(el, params, modify, before, after)
+    after(node, params)
     return result
 
-def traverse_ast(node: AstNode, params: dict, before: Callable[[AstNode, dict], None], after: Callable[[AstNode, dict], None]):
+def traverse_ast(node: AstNode, params: dict, before: AstCallback, after: AstCallback):
     if before:
         before(node, params)
     fs = vars(node)
@@ -301,7 +308,7 @@ def label_break_and_continue_statements(node: AstNode, labels: List[Tuple["str",
                 new_fun_decls.append(new_fun_decl)
             return ProgramNode(new_fun_decls)
         case FunctionDeclarationNode(name, params, body):
-            n_body = label_break_and_continue_statements(body, labels)
+            n_body = label_break_and_continue_statements(body, labels) if body else None
             return FunctionDeclarationNode(name, params, n_body)
         case VariableDeclarationNode(_, _):
             return node
@@ -433,6 +440,59 @@ def switch_add_cases_info(node: AstNode, params: dict):
         case _:
             pass
 
+@dataclass
+class SymbolsTableItem:
+    name: str
+    type: str
+    function_defined: bool
+
+
+def get_fun_type(params):
+    return f"Fun{len(params)}"
+
+
+def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
+    def process(node: AstNode, params: dict):
+        return node
+    
+    def before(node: AstNode, params: dict):
+        symbols: Dict[str, SymbolsTableItem] = params["symbols"]
+        match node:
+            case VariableDeclarationNode(name, _):
+                symbols[name] = SymbolsTableItem(name, "Int", False)
+            case FunctionDeclarationNode(name, f_params, body):
+                fun_type = get_fun_type(f_params)
+                has_body = body is not None
+                already_defined = False
+
+                if name in symbols:
+                    old_decl = symbols[name]
+                    if old_decl.type != fun_type:
+                        raise SyntaxError("Incompatible function declarations")
+                    already_defined = old_decl.function_defined
+                    if already_defined and has_body:
+                        raise SyntaxError("Function is defined more than once")
+                symbols[name] = SymbolsTableItem(name, fun_type, already_defined or has_body)
+
+                if has_body:
+                    for f_param in f_params:
+                        symbols[f_param] = SymbolsTableItem(f_param, "Int", False)
+            case FunctionCallExpressionNode(name, args):
+                f_type = symbols[name].type
+                if f_type == "Int":
+                    raise SyntaxError("Variable used as function name")
+                if f_type != get_fun_type(args):
+                    raise SyntaxError("Function calledc with the wrong number of arguments")
+            case VariableExpressionNode(name):
+                if symbols[name].type != "Int":
+                    raise SyntaxError("Function mame used as variable")
+
+    def after(node: AstNode, params: dict):
+        # symbols = params["symbols"]
+        pass
+
+    return process_ast(node, {"symbols": symbols}, process, before, after)
+
 def validate(ast: AstNode) -> "AstNode":
     s1 = identifier_resolution(ast, 0, dict())
     label_map = dict()
@@ -445,4 +505,5 @@ def validate(ast: AstNode) -> "AstNode":
     traverse_ast(s4, {}, assign_unique_labels_to_cases, None)
     traverse_ast(s4, {"switches": {}}, switch_add_cases_info, None)
 
+    typecheck_ast(s4, dict())
     return s4
