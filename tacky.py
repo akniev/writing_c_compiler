@@ -472,7 +472,7 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
         case SwitchStatementNode(exp, body, cases, defaultCase, label):
             instructions = []
 
-            break_label = get_label_name(f"{label}.break")
+            break_label = f"break.{label}"
             exp_result = t_parse_expression(exp, instructions)
 
             tmp_var = get_temp_var_name()
@@ -481,7 +481,7 @@ def t_parse_statement(fstatement: StatementNode) -> List["TInstruction"]:
                 c_label = c[1]
                 instructions.extend([
                     TBinaryInstruction(TSubtractionOperator(), exp_result, TConstant(c_val), TVariable(tmp_var)),
-                    TJumpIfZeroInstruction(tmp_var, c_label),
+                    TJumpIfZeroInstruction(TVariable(tmp_var), c_label),
                 ])
             instructions.extend([
                 TJumpInstruction(defaultCase if defaultCase else break_label)

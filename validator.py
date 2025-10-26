@@ -230,72 +230,72 @@ def traverse_ast(node: AstNode, params: dict, func: Callable[[AstNode, dict], Op
 
     return result
 
-def label_break_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> AstNode:   
+def label_break_and_continue_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> AstNode:   
     match node:
         # Top Level
         case ProgramNode(func):
-            n_func = label_break_statements(func, labels)
+            n_func = label_break_and_continue_statements(func, labels)
             return ProgramNode(n_func)
         case FunctionNode(name, body):
-            n_body = label_break_statements(body, labels)
+            n_body = label_break_and_continue_statements(body, labels)
             return FunctionNode(name, n_body)
         case DeclarationNode(_, _):
             return node
         
         # Block Items
         case StatementBlockItemNode(statement):
-            n_statement = label_break_statements(statement, labels)
+            n_statement = label_break_and_continue_statements(statement, labels)
             return StatementBlockItemNode(n_statement)
         case DeclarationBlockItemNode(declaration):
-            n_declaration = label_break_statements(declaration, labels)
+            n_declaration = label_break_and_continue_statements(declaration, labels)
             return DeclarationBlockItemNode(n_declaration)
         case BlockNode(items):
             n_items = []
             for item in items:
-                n_items.append(label_break_statements(item, labels))
+                n_items.append(label_break_and_continue_statements(item, labels))
             return BlockNode(n_items)
         
         # Statements
         case ReturnStatementNode(_) | ExpressionStatementNode(_) | GotoStatement(_) | NullStatementNode():
             return node
         case LabeledStatement(name, statement):
-            return LabeledStatement(name, label_break_statements(statement, labels))
+            return LabeledStatement(name, label_break_and_continue_statements(statement, labels))
         case CaseLabeledStatement(val, st, _, label):
             labels_copy = labels[:]
             while labels_copy and labels_copy[-1][1] != "switch":
                 labels_copy.pop()
             if not labels_copy:
                 raise SyntaxError
-            return CaseLabeledStatement(val, label_break_statements(st, labels), labels_copy[-1][0], label)
+            return CaseLabeledStatement(val, label_break_and_continue_statements(st, labels), labels_copy[-1][0], label)
         case DefaultLabeledStatement(st, _, label):
             labels_copy = labels[:]
             while labels_copy and labels_copy[-1][1] != "switch":
                 labels_copy.pop()
             if not labels_copy:
                 raise SyntaxError
-            return DefaultLabeledStatement(label_break_statements(st, labels), labels_copy[-1][0], label)
+            return DefaultLabeledStatement(label_break_and_continue_statements(st, labels), labels_copy[-1][0], label)
         case IfStatementNode(cond, then_st, else_st):
-            n_then_st = label_break_statements(then_st, labels)
-            n_else_st = label_break_statements(else_st, labels) if else_st else None
+            n_then_st = label_break_and_continue_statements(then_st, labels)
+            n_else_st = label_break_and_continue_statements(else_st, labels) if else_st else None
             return IfStatementNode(cond, n_then_st, n_else_st)
         case CompoundStatement(block):
-            n_block = label_break_statements(block, labels)
+            n_block = label_break_and_continue_statements(block, labels)
             return CompoundStatement(n_block)
         case WhileStatementNode(cond, body, _):
             loop_label = get_label_name("while")
-            n_body = label_break_statements(body, labels + [(loop_label, "loop")])
+            n_body = label_break_and_continue_statements(body, labels + [(loop_label, "loop")])
             return WhileStatementNode(cond, n_body, loop_label)
         case DoWhileStatementNode(body, cond, label):
             loop_label = get_label_name("dowhile")
-            n_body = label_break_statements(body, labels + [(loop_label, "loop")])
+            n_body = label_break_and_continue_statements(body, labels + [(loop_label, "loop")])
             return DoWhileStatementNode(n_body, cond, loop_label)
         case ForStatementNode(init, cond, post, body, _):
             loop_label = get_label_name("for")
-            n_body = label_break_statements(body, labels + [(loop_label, "loop")])
+            n_body = label_break_and_continue_statements(body, labels + [(loop_label, "loop")])
             return ForStatementNode(init, cond, post, n_body, loop_label)
         case SwitchStatementNode(exp, body, cases, defaultCase, _):
             switch_label = get_label_name("switch")
-            n_body = label_break_statements(body, labels + [(switch_label, "switch")])
+            n_body = label_break_and_continue_statements(body, labels + [(switch_label, "switch")])
             return SwitchStatementNode(exp, n_body, cases, defaultCase, switch_label)
         case BreakStatementNode(_):
             if not labels:
@@ -307,7 +307,7 @@ def label_break_statements(node: AstNode, labels: List[Tuple["str", "str"]]) -> 
                 labels_copy.pop()
             if not labels_copy:
                 raise SyntaxError
-            return ContinueStatementNode(labels_copy[-1])
+            return ContinueStatementNode(labels_copy[-1][0])
         case _:
             raise SyntaxError
 
@@ -374,7 +374,7 @@ def validate(ast: AstNode) -> "AstNode":
     label_map = dict()
     s2 = resolve_labels(s1, False, "", label_map)
     s3 = resolve_labels(s2, True, "", label_map)
-    s4 = label_break_statements(s3, [])
+    s4 = label_break_and_continue_statements(s3, [])
     traverse_ast(s4, {}, validate_prefix_and_postfix)
     traverse_ast(s4, {}, validate_non_constant_cases)
     traverse_ast(s4, {"cases": {}, "defaults": set()}, validate_case_uniqueness)
