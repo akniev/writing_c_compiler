@@ -67,7 +67,10 @@ def main(argv):
         ast.pretty_print()
         v_ast = validate(ast)
         tacky_ast = t_parse_program(v_ast)
+        print("===TACKY===")
+        tacky_ast.pretty_print()
         asm_ast = tacky_parse_program(tacky_ast)
+        print("====ASM====")
         asm_ast.pretty_print()
         return 0
     

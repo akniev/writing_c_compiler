@@ -103,7 +103,7 @@ class TLabelInstruction(TInstruction):
     value: str
 
 @dataclass
-class TFunctionCall(TInstruction):
+class TFunctionCallInstruction(TInstruction):
     name: str
     args: List["TValue"]
     dst: "TValue"
@@ -668,7 +668,7 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
                 v = t_parse_expression(arg, instructions)
                 values.append(v)
             result = TVariable(get_temp_var_name("fun"))
-            instructions.append(TFunctionCall(name, values, result))
+            instructions.append(TFunctionCallInstruction(name, values, result))
             return result
         case _:
             raise SyntaxError

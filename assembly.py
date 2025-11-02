@@ -40,7 +40,7 @@ class AsmNode:
 
 @dataclass
 class AsmProgram(AsmNode):
-    function: "AsmFunction"
+    functions: List["AsmFunction"]
 
 @dataclass
 class AsmFunction(AsmNode):
@@ -70,10 +70,6 @@ class AsmMove8(AsmInstruction):
 class AsmUnary(AsmInstruction):
     unary_operator: "AsmUnaryOperator"
     operand: "AsmOperand"
-
-@dataclass
-class AsmAllocateStack(AsmInstruction):
-    value: int
 
 @dataclass
 class AsmRet(AsmInstruction):
@@ -113,6 +109,22 @@ class AsmSetCC(AsmInstruction):
 
 @dataclass
 class AsmLabel(AsmInstruction):
+    name: str
+
+@dataclass
+class AsmAllocateStack(AsmInstruction):
+    value: int
+
+@dataclass
+class AsmDeallocateStack(AsmInstruction):
+    val: int
+
+@dataclass
+class AsmPush(AsmInstruction):
+    operand: "AsmOperand"
+
+@dataclass
+class AsmCall(AsmInstruction):
     name: str
 
 
@@ -174,18 +186,29 @@ class AsmReg(AsmNode):
 class AsmAX(AsmReg):
     pass
 
-class AsmR10(AsmReg):
+class AsmCX(AsmReg):
     pass
 
 class AsmDX(AsmReg):
     pass
 
+class AsmDI(AsmReg):
+    pass
+
+class AsmSI(AsmReg):
+    pass
+
+class AsmR8(AsmReg):
+    pass
+
+class AsmR9(AsmReg):
+    pass
+
+class AsmR10(AsmReg):
+    pass
+
 class AsmR11(AsmReg):
     pass
-
-class AsmCX(AsmReg):
-    pass
-
 
 
 
@@ -426,6 +449,62 @@ def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
             return [
                 AsmLabel(name)
             ]
+        case TFunctionCallInstruction(name, args, dst):
+            instructions = []
+            arg_registers = [AsmDI(), AsmSI(), AsmDX(), AsmCX(), AsmR8(), AsmR9()]
+
+            n = len(args)
+            n0 = min(n, len(arg_registers))
+            
+            register_args = []
+            stack_args = []
+            stack_padding = 0
+
+            for i in range(n0):
+                register_args.append(args[i])
+            
+            for i in range(n0, n):
+                stack_args.append(args[i])
+
+            if len(stack_args) % 2 == 1:
+                stack_padding = 8
+            else:
+                stack_padding = 0
+            
+            if stack_padding != 0:
+                instructions.append(AsmAllocateStack(stack_padding))
+
+            # Pass args in registers
+            reg_index = 0
+            for tacky_arg in register_args:
+                r = arg_registers[reg_index]
+                assembly_arg = tacky_parse_value(tacky_arg)
+                instructions.append(AsmMov(assembly_arg, AsmRegister(r)))
+                reg_index += 1
+
+            # Pass args on stack
+            for tacky_arg in reversed(stack_args):
+                assembly_arg = tacky_parse_value(tacky_arg)
+                match assembly_arg:
+                    case AsmRegister() | AsmImmediate():
+                        instructions.append(AsmPush(assembly_arg))
+                    case _:
+                        instructions.append(AsmMov(assembly_arg, AsmRegister(AsmAX())))
+                        instructions.append(AsmPush(AsmRegister(AsmAX())))
+
+            # Emit call instruction
+            instructions.append(AsmCall(name))
+
+            # Adjust stack pointer
+            bytes_to_remove = 8 * len(stack_args) + stack_padding
+            if bytes_to_remove != 0:
+                instructions.append(AsmDeallocateStack(bytes_to_remove))
+
+            # Retrieve return value
+            assembly_dst = tacky_parse_value(dst)
+            instructions.append(AsmMov(AsmRegister(AsmAX()), assembly_dst))
+
+            return instructions
         case _:
             raise SyntaxError
 
@@ -453,13 +532,19 @@ def get_stack_offset(identifier: str, offsets: dict) -> int:
 
 def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
     match node:
-        case AsmProgram(asm_func):
-            return AsmProgram(tacky_fix_asm(asm_func, offsets))
+        case AsmProgram(asm_funcs):
+            fixed_asm_funcs = []
+            for asm_func in asm_funcs:
+                fixed_asm_func = tacky_fix_asm(asm_func, offsets)
+                fixed_asm_funcs.append(fixed_asm_func)
+            return AsmProgram(fixed_asm_funcs)
         case AsmFunction(name, f_insts):
             var_stack_offsets = dict()
             a_insts = [tacky_fix_asm(f_inst, var_stack_offsets) for f_inst in f_insts]
             var_count = len(var_stack_offsets)
-            a_stack = AsmAllocateStack(4 * var_count)
+            stack_size = 4 * var_count
+            stack_size_rounded = rounded = ((stack_size + 15) // 16) * 16
+            a_stack = AsmAllocateStack(stack_size_rounded)
             a_insts = [a_stack] + a_insts
 
             a_movs_fixed = []
@@ -484,10 +569,12 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
             return AsmBinary(binop, tacky_fix_asm(op1, offsets), tacky_fix_asm(op2, offsets))
         case AsmIDiv(op):
             return AsmIDiv(tacky_fix_asm(op, offsets))
-        case AsmRegister(_) | AsmImmediate(_) | AsmCdq() | AsmRet() | AsmCmp(_, _) | AsmSetCC(_, _) | AsmJmp(_) | AsmJmpCC(_, _) | AsmLabel(_):
+        case AsmRegister(_) | AsmImmediate(_) | AsmCdq() | AsmRet() | AsmCmp(_, _) | AsmSetCC(_, _) | AsmJmp(_) | AsmJmpCC(_, _) | AsmLabel(_) | AsmAllocateStack(_) | AsmCall(_) | AsmDeallocateStack(_):
             return node
         case AsmPseudo(identifier):
             return AsmStack(get_stack_offset(identifier, offsets))
+        case AsmPush(op):
+            return AsmPush(tacky_fix_asm(op, offsets))
         case _:
             raise SyntaxError
 
@@ -545,7 +632,11 @@ def tacky_fix_movs_adds_subs_cmps(node: AsmNode) -> List["AsmNode"]:
 
 
 def tacky_parse_program(t_prog: TProgram) -> AsmProgram:
-    a_func = tacky_parse_function(t_prog.function)
-    a_prog = AsmProgram(a_func)
+    t_funcs = []
+
+    for f in t_prog.functions:
+        t_func = tacky_parse_function(f)
+        t_funcs.append(t_func)
+    a_prog = AsmProgram(t_funcs)
     a_prog_pseudo_replaced = tacky_fix_asm(a_prog, dict())
     return a_prog_pseudo_replaced
