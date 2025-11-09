@@ -208,7 +208,7 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
             p_node = ProgramNode(resolved_function_declarations)
             return p_node
         case FunctionDeclarationNode(name, params, block):
-            return FunctionDeclarationNode(name, params, resolve_labels(block, update_goto, func_prefix, label_map))
+            return FunctionDeclarationNode(name, params, resolve_labels(block, update_goto, name, label_map))
         case BlockNode(block_items):
             block_items_resolved = []
             for bi in block_items:
