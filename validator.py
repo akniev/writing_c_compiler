@@ -182,13 +182,13 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
                 identifier_resolution(true_exp, block_id, identifier_map),
                 identifier_resolution(false_exp, block_id, identifier_map)
             )
-        case FunctionCallExpressionNode(name, args):
+        case FunctionCallExpressionNode(name, args, plt):
             if name in identifier_map:
                 new_name = identifier_map[name].new_name
                 new_args = []
                 for arg in args:
                     new_args.append(identifier_resolution(arg, block_id, identifier_map))
-                return FunctionCallExpressionNode(new_name, new_args)
+                return FunctionCallExpressionNode(new_name, new_args, plt)
             else:
                 raise SyntaxError("Undeclared function!")
         case _:
@@ -268,7 +268,8 @@ type AstCallback = Callable[[AstNode, dict], None]
 type AstProcessor = Callable[[AstNode, dict], Optional[AstNode]]
 
 def process_ast(node: AstNode, params: dict, modify: AstProcessor, before: AstCallback, after: AstCallback) -> AstNode:
-    before(node, params)
+    if before:
+        before(node, params)
     processed = modify(node, params)
     result = processed if processed is not None else node
     fs = vars(result)
@@ -280,7 +281,8 @@ def process_ast(node: AstNode, params: dict, modify: AstProcessor, before: AstCa
             for el in f_val:
                 if isinstance(el, AstNode):
                     process_ast(el, params, modify, before, after)
-    after(node, params)
+    if after:
+        after(node, params)
     return result
 
 def traverse_ast(node: AstNode, params: dict, before: AstCallback, after: AstCallback):
@@ -493,6 +495,23 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
 
     return process_ast(node, {"symbols": symbols}, process, before, after)
 
+def save_defined_functions(node: AstNode, params: dict):
+    defined_functions = params["defined_functions"]
+    match node:
+        case FunctionDeclarationNode(name, _, body):
+            if body is not None:
+                defined_functions.add(name)
+
+def set_plt_flat_for_defined_functions(node: AstNode, params: dict):
+    defined_functions = params["defined_functions"]
+    match node:
+        case FunctionCallExpressionNode(name, args, _):
+            plt = not (name in defined_functions)
+            return FunctionCallExpressionNode(name, args, plt)
+        case _:
+            return node
+
+
 def validate(ast: AstNode) -> "AstNode":
     s1 = identifier_resolution(ast, 0, dict())
     label_map = dict()
@@ -505,5 +524,9 @@ def validate(ast: AstNode) -> "AstNode":
     traverse_ast(s4, {}, assign_unique_labels_to_cases, None)
     traverse_ast(s4, {"switches": {}}, switch_add_cases_info, None)
 
-    typecheck_ast(s4, dict())
+    defined_functions = set()
+    traverse_ast(s4, { "defined_functions": defined_functions }, save_defined_functions, None)
+    s5 = process_ast(s4, {"defined_functions": defined_functions}, set_plt_flat_for_defined_functions, None, None)
+
+    typecheck_ast(s5, dict())
     return s4

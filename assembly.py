@@ -126,6 +126,7 @@ class AsmPush(AsmInstruction):
 @dataclass
 class AsmCall(AsmInstruction):
     name: str
+    plt: bool
 
 
 
@@ -210,6 +211,12 @@ class AsmR10(AsmReg):
 class AsmR11(AsmReg):
     pass
 
+class AsmRSP(AsmReg):
+    pass
+
+class AsmRBP(AsmReg):
+    pass
+
 
 
 
@@ -234,6 +241,11 @@ class AsmPseudo(AsmOperand):
 @dataclass
 class AsmStack(AsmOperand):
     value: int
+
+@dataclass
+class AsmMem(AsmOperand):
+    addr: AsmRegister
+    offset: int
 
 
 
@@ -449,7 +461,7 @@ def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
             return [
                 AsmLabel(name)
             ]
-        case TFunctionCallInstruction(name, args, dst):
+        case TFunctionCallInstruction(name, args, dst, plt):
             instructions = []
             arg_registers = [AsmDI(), AsmSI(), AsmDX(), AsmCX(), AsmR8(), AsmR9()]
 
@@ -493,7 +505,7 @@ def tacky_parse_instruction(t_inst: TInstruction) -> List["AsmInstruction"]:
                         instructions.append(AsmPush(AsmRegister(AsmAX())))
 
             # Emit call instruction
-            instructions.append(AsmCall(name))
+            instructions.append(AsmCall(name, plt))
 
             # Adjust stack pointer
             bytes_to_remove = 8 * len(stack_args) + stack_padding
@@ -518,9 +530,35 @@ def tacky_parse_instructions(t_insts: List[TInstruction]) -> List[AsmInstruction
 
 
 def tacky_parse_function(t_func: TFunction) -> AsmFunction:
+    instructions = []
+    arg_registers = [AsmDI(), AsmSI(), AsmDX(), AsmCX(), AsmR8(), AsmR9()]
+
+    n = len(t_func.params)
+    n0 = min(n, len(arg_registers))
+    
+    register_args = []
+    stack_args = []
+
+    for i in range(n0):
+        register_args.append(t_func.params[i])
+    
+    for i in range(n0, n):
+        stack_args.append(t_func.params[i])
+
+    reg_index = 0
+    for param in register_args:
+        instructions.append(AsmMov(AsmRegister(arg_registers[reg_index]), AsmPseudo(param)))
+        reg_index += 1
+    
+    offset = 16
+    for param in stack_args:
+        instructions.append(AsmMov(AsmMem(AsmRegister(AsmRBP()), offset), AsmRegister(AsmR8())))
+        instructions.append(AsmMov(AsmRegister(AsmR8()), AsmPseudo(param)))
+        offset += 8
+
     a_name = t_func.identifier
-    a_inst = tacky_parse_instructions(t_func.instructions)
-    return AsmFunction(a_name, a_inst)
+    instructions.extend(tacky_parse_instructions(t_func.instructions))
+    return AsmFunction(a_name, instructions)
 
 
 def get_stack_offset(identifier: str, offsets: dict) -> int:
@@ -543,7 +581,7 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
             a_insts = [tacky_fix_asm(f_inst, var_stack_offsets) for f_inst in f_insts]
             var_count = len(var_stack_offsets)
             stack_size = 4 * var_count
-            stack_size_rounded = rounded = ((stack_size + 15) // 16) * 16
+            stack_size_rounded = ((stack_size + 15) // 16) * 16
             a_stack = AsmAllocateStack(stack_size_rounded)
             a_insts = [a_stack] + a_insts
 
@@ -569,12 +607,14 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
             return AsmBinary(binop, tacky_fix_asm(op1, offsets), tacky_fix_asm(op2, offsets))
         case AsmIDiv(op):
             return AsmIDiv(tacky_fix_asm(op, offsets))
-        case AsmRegister(_) | AsmImmediate(_) | AsmCdq() | AsmRet() | AsmCmp(_, _) | AsmSetCC(_, _) | AsmJmp(_) | AsmJmpCC(_, _) | AsmLabel(_) | AsmAllocateStack(_) | AsmCall(_) | AsmDeallocateStack(_):
+        case AsmRegister(_) | AsmImmediate(_) | AsmCdq() | AsmRet() | AsmCmp(_, _) | AsmSetCC(_, _) | AsmJmp(_) | AsmJmpCC(_, _) | AsmLabel(_) | AsmAllocateStack(_) | AsmCall(_, _) | AsmDeallocateStack(_) | AsmStack(_) | AsmMem(_, _):
             return node
         case AsmPseudo(identifier):
             return AsmStack(get_stack_offset(identifier, offsets))
         case AsmPush(op):
             return AsmPush(tacky_fix_asm(op, offsets))
+        # case AsmStack(_):
+        #     pass # stacks are fixed in tacky_fix_stack
         case _:
             raise SyntaxError
 

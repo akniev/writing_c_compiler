@@ -425,6 +425,7 @@ class ConditionalExpressionNode(ExpressionNode):
 class FunctionCallExpressionNode(ExpressionNode):
     name: str
     args: List["ExpressionNode"]
+    plt: bool
 
 
 
@@ -613,7 +614,7 @@ def ast_parse_function_call(tokens: List["Token"]) -> "FunctionCallExpressionNod
     
     expect_and_take(CloseParenthesis, tokens)
 
-    return FunctionCallExpressionNode(f_name, f_args)
+    return FunctionCallExpressionNode(f_name, f_args, False)
 
 def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
     token = peek(tokens)

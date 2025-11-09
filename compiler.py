@@ -22,6 +22,7 @@ def parse_args():
     group.add_argument("--validate", action="store_true", help="Run validation generation stage only")
     group.add_argument("--codegen", action="store_true", help="Run code generation stage only")
     group.add_argument("--tacky", action="store_true", help="Run TACKY generation stage only")
+    group.add_argument("-c", action="store_true", help="Generate object file")
 
     parser.add_argument("path", type=str, help="Path to the source file")
 
@@ -106,7 +107,10 @@ def main(argv):
     with open(asm_file, "w", encoding="utf-8") as f:
         f.write(asm)
 
-    cmd = ["gcc", str(asm_file), "-o", str(out_file)]
+    if args.c:
+        cmd = ["gcc", "-c", str(asm_file), "-o", f"{str(out_file)}.o"]
+    else:
+        cmd = ["gcc", str(asm_file), "-o", str(out_file)]
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:

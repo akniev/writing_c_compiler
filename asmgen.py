@@ -4,41 +4,93 @@ def reg_to_string_4bytes(reg: "AsmReg") -> str:
     match reg:
         case AsmAX():
             return f"%eax"
+        case AsmCX():
+            return f"%ecx"
+        case AsmDX():
+            return f"%edx"
+        case AsmDI():
+            return f"%edi"
+        case AsmSI():
+            return f"%esi"
+        case AsmR8():
+            return f"%r8d"
+        case AsmR9():
+            return f"%r9d"
         case AsmR10():
             return f"%r10d"
         case AsmR11():
             return f"%r11d"
-        case AsmDX():
-            return f"%edx"
-        case AsmCX():
-            return f"%ecx"
         case _:
-            raise SyntaxError
+            raise SyntaxError("Undefined register")
         
 def reg_to_string_1byte(reg: "AsmReg") -> str:
     match reg:
         case AsmAX():
             return f"%al"
+        case AsmCX():
+            return f"%cl"
+        case AsmDX():
+            return f"%dl"
+        case AsmDI():
+            return f"%dil"
+        case AsmSI():
+            return f"%sil"
+        case AsmR8():
+            return f"%r8b"
+        case AsmR9():
+            return f"%r9b"
         case AsmR10():
             return f"%r10b"
         case AsmR11():
             return f"%r11b"
-        case AsmDX():
-            return f"%dl"
-        case AsmCX():
-            return f"%cl"
         case _:
-            raise SyntaxError
+            raise SyntaxError("Undefined register")
+
+def reg_to_string_8bytes(reg: "AsmReg") -> str:
+    match reg:
+        case AsmAX():
+            return f"%rax"
+        case AsmCX():
+            return f"%rcx"
+        case AsmDX():
+            return f"%rdx"
+        case AsmDI():
+            return f"%rdi"
+        case AsmSI():
+            return f"%rsi"
+        case AsmR8():
+            return f"%r8"
+        case AsmR9():
+            return f"%r9"
+        case AsmR10():
+            return f"%r10"
+        case AsmR11():
+            return f"%r11"
+        case AsmRSP():
+            return f"%rsp"
+        case AsmRBP():
+            return f"%rbp"
+        case _:
+            raise SyntaxError("Undefined register")
 
 
-def operand_to_string(op: AsmOperand, one_byte = False):
+def operand_to_string(op: AsmOperand, bytes = 4):
     match op:
         case AsmImmediate(value):
             return f"${value}"
         case AsmRegister(reg):
-            return reg_to_string_4bytes(reg) if not one_byte else reg_to_string_1byte(reg)
+            if bytes == 1:
+                return reg_to_string_1byte(reg)
+            elif bytes == 4:
+                return reg_to_string_4bytes(reg)
+            elif bytes == 8:
+                return reg_to_string_8bytes(reg)
+            else:
+                raise SyntaxError
         case AsmStack(value):
             return f"{value}(%rbp)"
+        case AsmMem(AsmRegister(reg), offset):
+            return f"{offset}({reg_to_string_8bytes(reg)})"
         case _:
             raise SyntaxError
 
@@ -92,7 +144,7 @@ def print_instruction(ins: AsmInstruction) -> str:
         case AsmMov(src, dst):
             return f"movl {operand_to_string(src)}, {operand_to_string(dst)}"
         case AsmMove8(src, dst):
-            return f"movb {operand_to_string(src, one_byte=True)}, {operand_to_string(dst, one_byte=True)}"
+            return f"movb {operand_to_string(src, bytes=1)}, {operand_to_string(dst, bytes=1)}"
         case AsmAllocateStack(value):
             return f"subq ${value}, %rsp"
         case AsmUnary(operator, operand):
@@ -110,7 +162,7 @@ def print_instruction(ins: AsmInstruction) -> str:
         case AsmJmpCC(cond_code, label):
             return f"j{cond_code_to_suffix(cond_code)} .L{label}"
         case AsmSetCC(cond_code, operand):
-            return f"set{cond_code_to_suffix(cond_code)} {operand_to_string(operand, one_byte=True)}"
+            return f"set{cond_code_to_suffix(cond_code)} {operand_to_string(operand, bytes=1)}"
         case AsmLabel(name):
             return f".L{name}:"
         case AsmRet():
@@ -119,6 +171,15 @@ def print_instruction(ins: AsmInstruction) -> str:
   popq %rbp
   ret
 """
+        case AsmPush(operand):
+            return f"pushq {operand_to_string(operand, bytes=8)}"
+        case AsmCall(f_name, plt):
+            if plt:
+                return f"call {f_name}@PLT"
+            else:
+                return f"call {f_name}"
+        case AsmDeallocateStack(value):
+            return f"addq ${value}, %rsp"
         case _:
             raise SyntaxError
         
@@ -138,8 +199,8 @@ def print_function(f: AsmFunction) -> str:
 
 def gen_asm(asm_ast: AsmProgram) -> str:
     asm = ""
-
-    asm += print_function(asm_ast.function)
+    for func in asm_ast.functions:
+        asm += print_function(func)
 
     asm += '  .section .not.GNU-stack,"",@progbits'
 

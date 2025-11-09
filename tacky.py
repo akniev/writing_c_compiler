@@ -27,7 +27,10 @@ class TackyNode:
             elif isinstance(f_val, list):
                 print(indent_str + "  " + f_name + " = [")
                 for el in f_val:
-                    el.pretty_print(indent = indent + 4)
+                    if isinstance(el, TackyNode):
+                        el.pretty_print(indent = indent + 4)
+                    else:
+                        print(" " * (indent + 4) + repr(el))
                 
                 print(indent_str + "  " + "]")
 
@@ -49,6 +52,7 @@ class TProgram(TackyNode):
 @dataclass
 class TFunction(TackyNode):
     identifier: str
+    params: List[str]
     instructions: List["TInstruction"]
 
 
@@ -107,6 +111,7 @@ class TFunctionCallInstruction(TInstruction):
     name: str
     args: List["TValue"]
     dst: "TValue"
+    plt: bool
 
 
 
@@ -217,9 +222,10 @@ def t_parse_program(pnode: ProgramNode) -> TProgram:
 
 def t_parse_function(fnode: FunctionDeclarationNode) -> TFunction:
     fname = fnode.name
-    finstructions = t_parse_block_items(fnode.body.items)
+    finstructions = []
+    finstructions.extend(t_parse_block_items(fnode.body.items))
     finstructions.append(TReturnInstruction(TConstant(0)))
-    return TFunction(fname, finstructions)
+    return TFunction(fname, fnode.params, finstructions)
 
 def t_parse_block_item(b_item: "BlockItemNode") -> List["TInstruction"]:
     match b_item:
@@ -662,13 +668,13 @@ def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) 
             return t_parse_postfix_exp(op, exp, instructions)
         case ConditionalExpressionNode(cond, true_exp, false_exp):
             return t_parse_cond_exp(cond, true_exp, false_exp, instructions)
-        case FunctionCallExpressionNode(name, args):
+        case FunctionCallExpressionNode(name, args, plt):
             values = []
             for arg in args:
                 v = t_parse_expression(arg, instructions)
                 values.append(v)
             result = TVariable(get_temp_var_name("fun"))
-            instructions.append(TFunctionCallInstruction(name, values, result))
+            instructions.append(TFunctionCallInstruction(name, values, result, plt))
             return result
         case _:
             raise SyntaxError
