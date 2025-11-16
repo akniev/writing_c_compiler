@@ -146,7 +146,7 @@ class ProgramNode(AstNode):
 
 # Declaration
 
-class DeclarationStorageClass:
+class DeclarationStorageClass(AstNode):
     pass
 
 class StaticStorageClass(DeclarationStorageClass):

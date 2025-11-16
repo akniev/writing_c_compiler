@@ -16,6 +16,36 @@ class IdentifierMapEntry:
     block_id: bool
     has_linkage: bool
 
+class IdentifierAttrs:
+    pass
+
+@dataclass
+class FunAttr(IdentifierAttrs):
+    is_defined: bool
+    is_global: bool
+
+@dataclass
+class StaticAttr(IdentifierAttrs):
+    init: "InitialValue"
+    is_global: bool
+
+class LocalAttr(IdentifierAttrs):
+    pass
+
+class InitialValue:
+    pass
+
+class InitialValueTentative(InitialValue):
+    pass
+
+@dataclass
+class InitialValueInt(InitialValue):
+    value: int
+
+class InitialValueNoInitializer(InitialValue):
+    pass
+
+
 def resolve_param(param: str, block_id: int, identifier_map: Dict[str, IdentifierMapEntry]) -> str:
     if param in identifier_map and identifier_map[param].block_id == block_id:
         raise SyntaxError("Duplicate variable declaration!")
@@ -38,7 +68,9 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
             return p_node
         
         # Declarations
-        case FunctionDeclarationNode(name, params, body):
+        case FunctionDeclarationNode(name, params, body, storage_class):
+            if block_id != 0 and isinstance(storage_class, StaticStorageClass):
+                raise SyntaxError("Wrong storage class")
             new_block_id = get_block_id()
             if name in identifier_map:
                 prev_entry = identifier_map[name]
@@ -61,15 +93,31 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
                     new_body_item = identifier_resolution(body_item, new_block_id, inner_map)
                     new_body_items.append(new_body_item)
                 new_body = BlockNode(new_body_items)
-            return FunctionDeclarationNode(name, new_params, new_body)
-        case VariableDeclarationNode(name, exp):
-            new_name = resolve_param(name, block_id, identifier_map)
-            # if name in identifier_map and identifier_map[name].block_id == block_id:
-            #     raise SyntaxError("Duplicate variable declaration!")
-            # name_resolved = get_temp_var_name(name)
-            # identifier_map[name] = IdentifierMapEntry(name_resolved, block_id, False)
-            d_node = VariableDeclarationNode(new_name, identifier_resolution(exp, block_id, identifier_map))
-            return d_node
+            return FunctionDeclarationNode(name, new_params, new_body, storage_class)
+        case VariableDeclarationNode(name, exp, storage_class):
+            if block_id == 0: # File scope variable
+                identifier_map[name] = IdentifierMapEntry(name, block_id, True)
+                return node
+
+            # Local variables
+            if name in identifier_map:
+                prev_entry = identifier_map[name]
+                if prev_entry.block_id == block_id:
+                    if not (prev_entry.has_linkage and isinstance(storage_class, ExternStorageClass)):
+                        raise SyntaxError("Conflicting local declarations")
+            
+            if isinstance(storage_class, ExternStorageClass):
+                identifier_map[name] = IdentifierMapEntry(name, block_id, True)
+                return node
+            else:
+                new_name = resolve_param(name, block_id, identifier_map)
+                identifier_map[name] = IdentifierMapEntry(new_name, block_id, False)
+                # if name in identifier_map and identifier_map[name].block_id == block_id:
+                #     raise SyntaxError("Duplicate variable declaration!")
+                # name_resolved = get_temp_var_name(name)
+                # identifier_map[name] = IdentifierMapEntry(name_resolved, block_id, False)
+                d_node = VariableDeclarationNode(new_name, identifier_resolution(exp, block_id, identifier_map), storage_class)
+                return d_node
         
         
         # Blocks
@@ -125,6 +173,8 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
             n_body = identifier_resolution(body, new_block_id, new_variable_map)
             return ForStatementNode(n_init, n_cond, n_post, n_body, label)
         case ForInitDeclarationNode(decl):
+            if decl.storage_class is not None:
+                raise SyntaxError("Wrong variable declaration")
             n_decl = identifier_resolution(decl, block_id, identifier_map)
             return ForInitDeclarationNode(n_decl)
         case ForInitExpressionNode(exp):
@@ -207,8 +257,8 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
                 resolved_function_declarations.append(f_node_resolved)
             p_node = ProgramNode(resolved_function_declarations)
             return p_node
-        case FunctionDeclarationNode(name, params, block):
-            return FunctionDeclarationNode(name, params, resolve_labels(block, update_goto, name, label_map))
+        case FunctionDeclarationNode(name, params, block, storage_class):
+            return FunctionDeclarationNode(name, params, resolve_labels(block, update_goto, name, label_map), storage_class)
         case BlockNode(block_items):
             block_items_resolved = []
             for bi in block_items:
@@ -309,9 +359,9 @@ def label_break_and_continue_statements(node: AstNode, labels: List[Tuple["str",
                 new_fun_decl = label_break_and_continue_statements(fun_decl, labels)
                 new_fun_decls.append(new_fun_decl)
             return ProgramNode(new_fun_decls)
-        case FunctionDeclarationNode(name, params, body):
+        case FunctionDeclarationNode(name, params, body, storage_class):
             n_body = label_break_and_continue_statements(body, labels) if body else None
-            return FunctionDeclarationNode(name, params, n_body)
+            return FunctionDeclarationNode(name, params, n_body, storage_class)
         case VariableDeclarationNode(_, _):
             return node
         
@@ -446,7 +496,7 @@ def switch_add_cases_info(node: AstNode, params: dict):
 class SymbolsTableItem:
     name: str
     type: str
-    function_defined: bool
+    attrs: IdentifierAttrs
 
 
 def get_fun_type(params):
@@ -459,22 +509,100 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
     
     def before(node: AstNode, params: dict):
         symbols: Dict[str, SymbolsTableItem] = params["symbols"]
+        block_ids: List[int] = params["block_ids"]
         match node:
-            case VariableDeclarationNode(name, _):
-                symbols[name] = SymbolsTableItem(name, "Int", False)
-            case FunctionDeclarationNode(name, f_params, body):
+            case BlockNode(_):
+                new_block_id = get_block_id()
+                block_ids.append(new_block_id)
+            case VariableDeclarationNode(name, init, storage_class):
+                block_id = block_ids[-1]
+                initial_value = None
+                if block_id == 0: # File scope
+                    match init:
+                        case ConstantExpressionNode(value):
+                            initial_value = InitialValueInt(value)
+                        case None:
+                            if isinstance(storage_class, ExternStorageClass):
+                                initial_value = InitialValueNoInitializer()
+                            else:
+                                initial_value = InitialValueTentative()
+                        case _:
+                            raise SyntaxError("Non-constant initializer!")
+                    
+                    is_global = not isinstance(storage_class, StaticStorageClass)
+
+                    if name in symbols:
+                        old_decl = symbols[name]
+
+                        if old_decl.type != "Int":
+                            raise SyntaxError("Function redeclared as variable")
+                        if isinstance(storage_class, ExternStorageClass):
+                            is_global = old_decl.attrs.is_global
+                        elif old_decl.attrs.is_global != is_global:
+                            raise SyntaxError("Conflicting variable linkage")
+                        
+                        if isinstance(old_decl.attrs.init, InitialValueInt):
+                            if isinstance(initial_value, InitialValueInt):
+                                raise SyntaxError("Conflicting file scope variable definitions")
+                            else:
+                                initial_value = old_decl.attrs.init
+                        elif not isinstance(initial_value, InitialValueInt) and isinstance(old_decl.attrs.init, InitialValueTentative):
+                            initial_value = InitialValueTentative()
+                    
+                    attrs = StaticAttr(initial_value, is_global)
+                    symbols[name] = SymbolsTableItem(name, "Int", attrs)
+                else: # Local scope
+                    if isinstance(storage_class, ExternStorageClass):
+                        if init is not None:
+                            raise SyntaxError("Initializer on local extern variable declaration")
+
+                        if name in symbols:
+                            old_decl = symbols[name]
+                            if old_decl.type != "Int":
+                                raise SyntaxError("Function redeclared as variable")
+                        else:
+                            attrs = StaticAttr(InitialValueNoInitializer(), True)
+                            symbols[name] = SymbolsTableItem(name, "Int", attrs)
+                    elif isinstance(storage_class, StaticStorageClass):
+                        initial_value = None
+                        match init:
+                            case ConstantExpressionNode(value):
+                                initial_value = InitialValueInt(value)
+                            case None:
+                                initial_value = InitialValueInt(0)
+                            case _:
+                                raise SyntaxError("Non-constant initializer on local static variable")
+                        
+                        attrs = StaticAttr(initial_value, False)
+                        symbols[name] = SymbolsTableItem(name, "Int", attrs)
+                    else:
+                        symbols[name] = SymbolsTableItem(name, "Int", LocalAttr())
+                        # if init is not None:
+                        #     typecheck_ast(init, symbols)
+                
+                # symbols[name] = SymbolsTableItem(name, "Int", False)
+            case FunctionDeclarationNode(name, f_params, body, storage_class):
                 fun_type = get_fun_type(f_params)
                 has_body = body is not None
                 already_defined = False
+                is_global = not isinstance(storage_class, StaticStorageClass)
 
                 if name in symbols:
                     old_decl = symbols[name]
+                    if not isinstance(old_decl.attrs, FunAttr):
+                        raise SyntaxError("Wrong attribute type")
+                    old_attrs: FunAttr = old_decl.attrs
                     if old_decl.type != fun_type:
                         raise SyntaxError("Incompatible function declarations")
-                    already_defined = old_decl.function_defined
+                    already_defined = old_attrs.is_defined
                     if already_defined and has_body:
                         raise SyntaxError("Function is defined more than once")
-                symbols[name] = SymbolsTableItem(name, fun_type, already_defined or has_body)
+                    if old_attrs.is_global and isinstance(storage_class, StaticStorageClass):
+                        raise SyntaxError("Static function declaration follows non-static")
+                    is_global = old_attrs.is_global
+
+                attrs = FunAttr((already_defined or has_body), is_global)
+                symbols[name] = SymbolsTableItem(name, fun_type, attrs)
 
                 if has_body:
                     for f_param in f_params:
@@ -490,10 +618,13 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                     raise SyntaxError("Function mame used as variable")
 
     def after(node: AstNode, params: dict):
-        # symbols = params["symbols"]
+        block_ids: List[int] = params["block_ids"]
+        match node:
+            case BlockNode(_):
+                block_ids.pop()
         pass
 
-    return process_ast(node, {"symbols": symbols}, process, before, after)
+    return process_ast(node, {"symbols": symbols, "block_ids": [0]}, process, before, after)
 
 def save_defined_functions(node: AstNode, params: dict):
     defined_functions = params["defined_functions"]
