@@ -136,7 +136,7 @@ class AstNode:
         print(indent_str + ")")
 
 
-# Top level        
+# MARK: - Top level        
 
 @dataclass
 class ProgramNode(AstNode):
@@ -144,17 +144,45 @@ class ProgramNode(AstNode):
 
 
 
-# Declaration
 
-class DeclarationStorageClass(AstNode):
+
+
+# MARK: - Specifiers
+
+class DeclarationSpecifierNode(AstNode):
     pass
 
-class StaticStorageClass(DeclarationStorageClass):
+
+
+
+
+class StorageClassSpecifierNode(DeclarationSpecifierNode):
     pass
 
-class ExternStorageClass(DeclarationStorageClass):
+class StaticStorageClassNode(StorageClassSpecifierNode):
     pass
 
+class ExternStorageClassNode(StorageClassSpecifierNode):
+    pass
+
+
+
+
+class TypeSpecifierNode(DeclarationSpecifierNode):
+    pass
+
+class IntTypeNode(TypeSpecifierNode):
+    pass
+
+class LongTypeNode(TypeSpecifierNode):
+    pass
+
+@dataclass
+class FunTypeNode(TypeSpecifierNode):
+    params: List["TypeSpecifierNode"]
+    ret: "TypeSpecifierNode"
+
+# MARK: - Declarations
 
 class DeclarationNode(AstNode):
     pass
@@ -163,17 +191,19 @@ class DeclarationNode(AstNode):
 class VariableDeclarationNode(DeclarationNode):
     name: str
     init: Optional["ExpressionNode"]
-    storage_class: Optional["DeclarationStorageClass"]
+    var_type: "TypeSpecifierNode"
+    storage_class: Optional["StorageClassSpecifierNode"]
 
 @dataclass
 class FunctionDeclarationNode(AstNode):
     name: str
     params: List[str]
     body: Optional["BlockNode"]
-    storage_class: Optional["DeclarationStorageClass"]
+    fun_type: "TypeSpecifierNode"
+    storage_class: Optional["StorageClassSpecifierNode"]
 
 
-# Block items
+# MARK: - Block items
 
 @dataclass
 class BlockNode(AstNode):
@@ -193,7 +223,7 @@ class DeclarationBlockItemNode(BlockItemNode):
 
 
 
-# Statements
+# MARK: - Statements
 
 class StatementNode(AstNode):
     pass
@@ -279,7 +309,7 @@ class SwitchStatementNode(StatementNode):
 
 
 
-# ForInit
+# MARK: - ForInit
 
 class ForInitNode(AstNode):
     pass
@@ -293,7 +323,7 @@ class ForInitExpressionNode(ForInitNode):
     expression: Optional["ExpressionNode"]
 
 
-# Unary Operators
+# MARK: - Unary Operators
 
 class UnaryOperatorNode(AstNode):
     pass
@@ -308,7 +338,7 @@ class NotOperatorNode(UnaryOperatorNode):
     pass
 
 
-# Prefix/Postfix Operators
+# MARK: - Prefix/Postfix Operators
 
 class IncrementOperatorNode(UnaryOperatorNode):
     pass
@@ -319,7 +349,7 @@ class DecrementOperatorNode(UnaryOperatorNode):
 
 
 
-# Binary Operators
+# MARK: - Binary Operators
 
 class BinaryOperatorNode(AstNode):
     pass
@@ -382,14 +412,14 @@ class AssignmentOperatorNode(BinaryOperatorNode):
     pass
 
 
-# Expressions
+# MARK: - Expressions
 
 class ExpressionNode(AstNode):
     pass
 
 @dataclass
 class ConstantExpressionNode(ExpressionNode):
-    const: int
+    const: "ConstNode"
 
 @dataclass
 class UnaryExpressionNode(ExpressionNode):
@@ -417,6 +447,11 @@ class VariableExpressionNode(ExpressionNode):
     name: str
 
 @dataclass
+class CastExpressionNode(ExpressionNode):
+    target_type: "TypeSpecifierNode"
+    exp: "ExpressionNode"
+
+@dataclass
 class AssignmentExpressionNode(ExpressionNode):
     lhs: "ExpressionNode"
     rhs: "ExpressionNode"
@@ -440,6 +475,18 @@ class FunctionCallExpressionNode(ExpressionNode):
     plt: bool
 
 
+# MARK: - Constants
+
+class ConstNode:
+    pass
+
+@dataclass
+class ConstInt(ConstNode):
+    value: int
+
+@dataclass
+class ConstLong(ConstNode):
+    value: int
 
 
 
@@ -628,14 +675,47 @@ def ast_parse_function_call(tokens: List["Token"]) -> "FunctionCallExpressionNod
 
     return FunctionCallExpressionNode(f_name, f_args, False)
 
+
+def ast_parse_constant(tokens: List["Token"]) -> "ExpressionNode":
+    match peek(tokens):
+        case Constant(value) | LongIntegerConstant(value):
+            if value > 2**63 - 1:
+                raise SyntaxError("Constant is too large to be represented by long")
+            take_token(tokens)
+            if value > 2**31 - 1:
+                return ConstantExpressionNode(ConstLong(value))
+            else:
+                return ConstantExpressionNode(ConstInt(value))
+        case _:
+            raise SyntaxError("Unknown constant type")
+            
+
+def ast_get_type(tokens: List["Token"]) -> "TypeSpecifierNode":
+    specifiers = []
+    while isinstance(peek(tokens), Identifier) and peek(tokens).name in ["int", "long"]:
+        t: Identifier = expect_and_take(Identifier, tokens)
+        specifiers.append(t)
+    
+    return ast_type_from_tokens(specifiers)
+
+def ast_type_from_tokens(tokens: List["Token"]) -> "TypeSpecifierNode":
+    specifiers = [token.name for token in tokens]
+
+    if specifiers == ["int"]:
+        return IntTypeNode()
+    
+    if specifiers == ["int", "long"] or specifiers == ["long", "int"] or specifiers == ["long"]:
+        return LongTypeNode()
+    
+    raise SyntaxError("Invalid type specifier")
+
 def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
     token = peek(tokens)
     if token is None:
         raise SyntaxError("Unexpected end of file")
 
-    if isinstance(token, Constant):
-        s_const: "Constant" = expect_and_take(Constant, tokens)
-        return ConstantExpressionNode(s_const.value)
+    if isinstance(token, (Constant, LongIntegerConstant)):
+        return ast_parse_constant(tokens)
     elif isinstance(token, Identifier) and isinstance(peek(tokens, 2), OpenParenthesis):
         return ast_parse_function_call(tokens)
     elif isinstance(token, Identifier):
@@ -652,10 +732,18 @@ def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
         exp = ast_parse_exp(tokens, 1000)
         return PrefixExpressionNode(op, exp)
     elif isinstance(token, OpenParenthesis):
-        expect_and_take(OpenParenthesis, tokens)
-        exp = ast_parse_exp(tokens, 0)
-        expect_and_take(CloseParenthesis, tokens)
-        return exp
+        next_token = peek(tokens, 2)
+        if isinstance(next_token, Identifier) and next_token.name in ["long", "int"]:
+            expect_and_take(OpenParenthesis, tokens)
+            cast_type = ast_get_type(tokens)
+            expect_and_take(CloseParenthesis, tokens)
+            exp = ast_parse_exp(tokens, min_prec)
+            return CastExpressionNode(cast_type, exp)
+        else:
+            expect_and_take(OpenParenthesis, tokens)
+            exp = ast_parse_exp(tokens, 0)
+            expect_and_take(CloseParenthesis, tokens)
+            return exp
     else:
         raise SyntaxError("Unexpected symbol")
 
@@ -663,7 +751,7 @@ def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
 def ast_parse_block_item(tokens: List["Token"]) -> "BlockItemNode":
     match peek(tokens):
         # Declaration
-        case Identifier("int" | "static" | "extern", True): 
+        case Identifier("int" | "long" | "static" | "extern", True): 
             return DeclarationBlockItemNode(ast_parse_declaration(tokens))
         # Statement
         case _:
@@ -673,12 +761,12 @@ def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationNode":
     types = []
     storage_specifiers = []
     while isinstance(peek(tokens), Identifier) and peek(tokens).is_keyword:
-        if peek(tokens).name == "int":
-            types.append(expect_and_take_identifier("int", True, tokens))
+        if peek(tokens).name in ["int", "long"]:
+            types.append(expect_and_take(Identifier, tokens))
         else:
             storage_specifiers.append(expect_and_take(Identifier, tokens))
 
-    if len(types) != 1 or len(storage_specifiers) > 1:
+    if len(types) < 1 or len(storage_specifiers) > 1:
         raise SyntaxError("Wrong declaration!")
 
     if isinstance(peek(tokens, 2), OpenParenthesis):
@@ -686,19 +774,18 @@ def ast_parse_declaration(tokens: List["Token"]) -> "DeclarationNode":
     else:
         return ast_parse_variable_declaration(types, storage_specifiers, tokens)
 
-def storage_class_from_identifier(identifier: Identifier) -> DeclarationStorageClass:
+def storage_class_from_identifier(identifier: Identifier) -> StorageClassSpecifierNode:
     if identifier.name == "static":
-        return StaticStorageClass()
+        return StaticStorageClassNode()
     elif identifier.name == "extern":
-        return ExternStorageClass()
+        return ExternStorageClassNode()
     else:
         raise SyntaxError 
     
 def ast_parse_variable_declaration(types: List["Identifier"], storage_specifiers: List["Identifier"], tokens: List["Token"]) -> "VariableDeclarationNode":
-    if len(types) != 1 or types[0].name != "int":
-        raise SyntaxError
+    var_type = ast_type_from_tokens(types)
     
-    storage_class: Optional["DeclarationStorageClass"] = None
+    storage_class: Optional["StorageClassSpecifierNode"] = None
     if len(storage_specifiers) == 1:
         storage_class = storage_class_from_identifier(storage_specifiers[0])
      
@@ -707,12 +794,12 @@ def ast_parse_variable_declaration(types: List["Identifier"], storage_specifiers
         raise SyntaxError
     t = peek(tokens)
     if isinstance(t, Semicolon):
-        decl = VariableDeclarationNode(decl_identifier.name, None, storage_class)
+        decl = VariableDeclarationNode(decl_identifier.name, None, var_type, storage_class)
         expect_and_take(Semicolon, tokens)
         return decl
     expect_and_take(EqualSign, tokens)
     exp = ast_parse_exp(tokens, 0)
-    decl = VariableDeclarationNode(decl_identifier.name, exp, storage_class)
+    decl = VariableDeclarationNode(decl_identifier.name, exp, var_type, storage_class)
     expect_and_take(Semicolon, tokens)
     return decl
 
@@ -742,7 +829,7 @@ def ast_parse_for_init(tokens: List["Token"]) -> Optional["ForInitNode"]:
         case Semicolon():
             expect_and_take(Semicolon, tokens)
             return None
-        case Identifier("int" | "static" | "extern", True):
+        case Identifier("int" | "long" | "static" | "extern", True):
             decl = ast_parse_declaration(tokens)
             if not isinstance(decl, VariableDeclarationNode):
                 raise SyntaxError
@@ -880,10 +967,9 @@ def ast_parse_block(tokens: List["Token"]) -> "BlockNode":
 
 
 def ast_parse_function_declaration(types: List["Identifier"], storage_specifiers: List["Identifier"], tokens: List["Token"]) -> "FunctionDeclarationNode":
-    if len(types) != 1 or types[0].name != "int":
-        raise SyntaxError
+    fun_ret_type = ast_type_from_tokens(types)
     
-    storage_class: Optional["DeclarationStorageClass"] = None
+    storage_class: Optional["StorageClassSpecifierNode"] = None
     if len(storage_specifiers) == 1:
         storage_class = storage_class_from_identifier(storage_specifiers[0])
 
@@ -895,20 +981,24 @@ def ast_parse_function_declaration(types: List["Identifier"], storage_specifiers
 
     expect_and_take(OpenParenthesis, tokens)
 
-    param_list = None
+    param_names = None
+    param_types = None    
 
     if check_identifier("void", True, peek(tokens)):
         expect_and_take(Identifier, tokens)
-        param_list = []
+        param_names = []
+        param_types = []
     else:
-        expect_and_take_identifier("int", True, tokens)
+        param_type = ast_get_type(tokens)
         p: Identifier = expect_and_take(Identifier, tokens)
-        param_list = [p.name]
+        param_names = [p.name]
+        param_types = [param_type]
         while not isinstance(peek(tokens), CloseParenthesis):
             expect_and_take(Comma, tokens)
-            expect_and_take_identifier("int", True, tokens)
+            param_type = ast_get_type(tokens)
             p: Identifier = expect_and_take(Identifier, tokens)
-            param_list.append(p.name)
+            param_names.append(p.name)
+            param_types.append(param_type)
             
     expect_and_take(CloseParenthesis, tokens)
 
@@ -919,7 +1009,8 @@ def ast_parse_function_declaration(types: List["Identifier"], storage_specifiers
     else:
         expect_and_take(Semicolon, tokens)
 
-    return FunctionDeclarationNode(f_name.name, param_list, f_body, storage_class)
+    fun_type = FunTypeNode(param_types, fun_ret_type)
+    return FunctionDeclarationNode(f_name.name, param_names, f_body, fun_type, storage_class)
 
 
 def ast_parse_program(tokens: List["Token"]) -> "ProgramNode":

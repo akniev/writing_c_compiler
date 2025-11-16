@@ -35,7 +35,7 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
         
         # Declarations
         case FunctionDeclarationNode(name, params, body, storage_class):
-            if block_id != 0 and isinstance(storage_class, StaticStorageClass):
+            if block_id != 0 and isinstance(storage_class, StaticStorageClassNode):
                 raise SyntaxError("Wrong storage class")
             new_block_id = get_block_id()
             if name in identifier_map:
@@ -69,10 +69,10 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
             if name in identifier_map:
                 prev_entry = identifier_map[name]
                 if prev_entry.block_id == block_id:
-                    if not (prev_entry.has_linkage and isinstance(storage_class, ExternStorageClass)):
+                    if not (prev_entry.has_linkage and isinstance(storage_class, ExternStorageClassNode)):
                         raise SyntaxError("Conflicting local declarations")
             
-            if isinstance(storage_class, ExternStorageClass):
+            if isinstance(storage_class, ExternStorageClassNode):
                 identifier_map[name] = IdentifierMapEntry(name, block_id, True)
                 return node
             else:
@@ -482,21 +482,21 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                         case ConstantExpressionNode(value):
                             initial_value = InitialValueInt(value)
                         case None:
-                            if isinstance(storage_class, ExternStorageClass):
+                            if isinstance(storage_class, ExternStorageClassNode):
                                 initial_value = InitialValueNoInitializer()
                             else:
                                 initial_value = InitialValueTentative()
                         case _:
                             raise SyntaxError("Non-constant initializer!")
                     
-                    is_global = not isinstance(storage_class, StaticStorageClass)
+                    is_global = not isinstance(storage_class, StaticStorageClassNode)
 
                     if name in symbols:
                         old_decl = symbols[name]
 
                         if old_decl.type != "Int":
                             raise SyntaxError("Function redeclared as variable")
-                        if isinstance(storage_class, ExternStorageClass):
+                        if isinstance(storage_class, ExternStorageClassNode):
                             is_global = old_decl.attrs.is_global
                         elif old_decl.attrs.is_global != is_global:
                             raise SyntaxError("Conflicting variable linkage")
@@ -512,7 +512,7 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                     attrs = StaticAttr(initial_value, is_global)
                     symbols[name] = SymbolsTableItem(name, "Int", attrs)
                 else: # Local scope
-                    if isinstance(storage_class, ExternStorageClass):
+                    if isinstance(storage_class, ExternStorageClassNode):
                         if init is not None:
                             raise SyntaxError("Initializer on local extern variable declaration")
 
@@ -523,7 +523,7 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                         else:
                             attrs = StaticAttr(InitialValueNoInitializer(), True)
                             symbols[name] = SymbolsTableItem(name, "Int", attrs)
-                    elif isinstance(storage_class, StaticStorageClass):
+                    elif isinstance(storage_class, StaticStorageClassNode):
                         initial_value = None
                         match init:
                             case ConstantExpressionNode(value):
@@ -545,7 +545,7 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                 fun_type = get_fun_type(f_params)
                 has_body = body is not None
                 already_defined = False
-                is_global = not isinstance(storage_class, StaticStorageClass)
+                is_global = not isinstance(storage_class, StaticStorageClassNode)
 
                 if name in symbols:
                     old_decl = symbols[name]
@@ -557,7 +557,7 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                     already_defined = old_attrs.is_defined
                     if already_defined and has_body:
                         raise SyntaxError("Function is defined more than once")
-                    if old_attrs.is_global and isinstance(storage_class, StaticStorageClass):
+                    if old_attrs.is_global and isinstance(storage_class, StaticStorageClassNode):
                         raise SyntaxError("Static function declaration follows non-static")
                     is_global = old_attrs.is_global
 

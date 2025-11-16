@@ -290,7 +290,7 @@ def t_parse_function_declaration(node: FunctionDeclarationNode) -> List["TInstru
 
 
 def t_parse_variable_declaration(d_node: VariableDeclarationNode) -> List["TInstruction"]:
-    if isinstance(d_node.storage_class, StaticStorageClass):
+    if isinstance(d_node.storage_class, StaticStorageClassNode):
         return []
 
     instructions = []
