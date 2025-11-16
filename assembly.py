@@ -41,7 +41,7 @@ class AsmNode:
 
 @dataclass
 class AsmProgram(AsmNode):
-    functions: List["AsmTopLevel"]
+    top_level_items: List["AsmTopLevel"]
 
 
 
@@ -665,23 +665,23 @@ def tacky_fix_movs_adds_subs_cmps(node: AsmNode) -> List["AsmNode"]:
                        | AsmSubOp() 
                        | AsmAndOp() 
                        | AsmXorOp() 
-                       | AsmOrOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
+                       | AsmOrOp() as binop, AsmStack(_) | AsmData(_) as op1, AsmStack(_) | AsmData(_) as op2):
             return [
                 AsmMov(op1, AsmRegister(AsmR10())),
                 AsmBinary(binop, AsmRegister(AsmR10()), op2)
             ]
-        case AsmBinary(AsmShlOp() | AsmShrOp() as binop, AsmStack(_) as op1, AsmStack(_) as op2):
+        case AsmBinary(AsmShlOp() | AsmShrOp() as binop, AsmStack(_) | AsmData(_) as op1, AsmStack(_) | AsmData(_) as op2):
             return [
                 AsmMove8(op1, AsmRegister(AsmCX())),
                 AsmBinary(binop, AsmRegister(AsmCX()), op2)
             ]
-        case AsmBinary(AsmMultOp(), op1, AsmStack(_) as op2):
+        case AsmBinary(AsmMultOp(), op1, AsmStack(_) | AsmData(_) as op2):
             return [
                 AsmMov(op2, AsmRegister(AsmR11())),
                 AsmBinary(AsmMultOp(), op1, AsmRegister(AsmR11())),
                 AsmMov(AsmRegister(AsmR11()), op2)
             ]
-        case AsmCmp(AsmStack(_) as op1, AsmStack(_) as op2):
+        case AsmCmp(AsmStack(_) | AsmData(_) as op1, AsmStack(_) | AsmData(_) as op2):
             return [
                 AsmMov(op1, AsmRegister(AsmR10())),
                 AsmCmp(AsmRegister(AsmR10()), op2)
@@ -701,7 +701,7 @@ def tacky_parse_program(t_prog: TProgram, _symbols: Dict[str, SymbolsTableItem])
 
     top_level = []
 
-    for entry in t_prog.functions:
+    for entry in t_prog.top_level_items:
         match entry:
             case TStaticVariable(name, is_global, init):
                 top_level.append(AsmStaticVariable(name, is_global, init))

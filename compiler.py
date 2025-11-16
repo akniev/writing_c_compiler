@@ -86,11 +86,11 @@ def main(argv):
     print("===PARSER==")
     tokens = get_tokens(text)
     ast = parse(tokens)
-    v_ast = validate(ast)
+    v_ast, symbols = validate(ast)
     v_ast.pretty_print()
     
     print("===TACKY===")
-    tacky_ast, symbols = t_parse_program(v_ast)
+    tacky_ast = t_parse_program(v_ast, symbols)
     tacky_ast.pretty_print()
     
     print("====ASM====")

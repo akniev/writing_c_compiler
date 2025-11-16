@@ -89,6 +89,8 @@ def operand_to_string(op: AsmOperand, bytes = 4):
                 raise SyntaxError
         case AsmStack(value):
             return f"{value}(%rbp)"
+        case AsmData(value):
+            return f"{value}(%rip)"
         case AsmMem(AsmRegister(reg), offset):
             return f"{offset}({reg_to_string_8bytes(reg)})"
         case _:
@@ -186,7 +188,9 @@ def print_instruction(ins: AsmInstruction) -> str:
 
 def print_function(f: AsmFunction) -> str:
     asm = ""
-    asm += f".globl {f.name}\n"
+    asm += f".text\n"
+    if f.is_global:
+        asm += f".globl {f.name}\n"
     asm += f"{f.name}:\n"
     asm += f"  pushq %rbp\n"
     asm += f"  movq  %rsp, %rbp\n"
@@ -196,12 +200,49 @@ def print_function(f: AsmFunction) -> str:
     
     return asm
 
+def print_static_variable(s: AsmStaticVariable) -> str:
+    asm = ""
+
+    if s.init != 0:
+        if s.is_global:
+            asm += f"  .globl {s.name}\n"
+        asm += f"  .data\n"
+        asm += f"  .align 4\n"
+        asm += f"{s.name}:\n"
+        asm += f"  .long {s.init}\n"
+    else:
+        if s.is_global:
+            asm += f"  .globl {s.name}\n"
+        asm += f"  .bss\n"
+        asm += f"  .align 4\n"
+        asm += f"{s.name}:\n"
+        asm += f"  .zero 4\n"
+    
+    asm += f"\n"
+
+    return asm
+
 
 def gen_asm(asm_ast: AsmProgram) -> str:
     asm = ""
-    for func in asm_ast.functions:
-        asm += print_function(func)
+    functions = []
+    static_vars = []
 
-    asm += '  .section .not.GNU-stack,"",@progbits'
+    for entry in asm_ast.top_level_items:
+        match entry:
+            case AsmFunction(_, _, _) as f:
+                functions.append(f)
+            case AsmStaticVariable(_, _, _) as s:
+                static_vars.append(s)
+            case _:
+                raise SyntaxError
+            
+    for f in functions:
+        asm += print_function(f)
+
+    for s in static_vars:
+        asm += print_static_variable(s)
+
+    asm += '  .section .note.GNU-stack,"",@progbits'
 
     return asm

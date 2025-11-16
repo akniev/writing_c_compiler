@@ -47,7 +47,7 @@ label_counter = 0
 
 @dataclass
 class TProgram(TackyNode):
-    functions: List["TopLevel"]
+    top_level_items: List["TopLevel"]
 
 
 class TopLevel(TackyNode):
@@ -276,9 +276,9 @@ def t_parse_block_item(b_item: "BlockItemNode") -> List["TInstruction"]:
 
 def t_parse_declaration(node: DeclarationNode):
     match node:
-        case VariableDeclarationNode(_, _):
+        case VariableDeclarationNode(_, _, _):
             return t_parse_variable_declaration(node)
-        case FunctionDeclarationNode(_, _, _):
+        case FunctionDeclarationNode(_, _, _, _):
             return t_parse_function_declaration(node)
         case _:
             raise SyntaxError("Unknown declaration type!")
@@ -290,6 +290,9 @@ def t_parse_function_declaration(node: FunctionDeclarationNode) -> List["TInstru
 
 
 def t_parse_variable_declaration(d_node: VariableDeclarationNode) -> List["TInstruction"]:
+    if isinstance(d_node.storage_class, StaticStorageClass):
+        return []
+
     instructions = []
     if d_node.init is None:
         return []
