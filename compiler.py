@@ -78,7 +78,7 @@ def main(argv):
         tacky_ast = t_parse_program(v_ast, symbols)
         print("===TACKY===")
         tacky_ast.pretty_print()
-        asm_ast = tacky_parse_program(tacky_ast)
+        asm_ast = tacky_parse_program(tacky_ast, symbols)
         print("====ASM====")
         asm_ast.pretty_print()
         return 0

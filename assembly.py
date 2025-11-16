@@ -2,7 +2,8 @@ from parser import *
 from lexer import *
 from dataclasses import *
 from tacky import *
-import weakref
+
+symbols: Dict[str, SymbolsTableItem] = None
 
 class AsmNode:
     def pretty_print(self, prefix = "", indent = 0):
@@ -40,12 +41,28 @@ class AsmNode:
 
 @dataclass
 class AsmProgram(AsmNode):
-    functions: List["AsmFunction"]
+    functions: List["AsmTopLevel"]
+
+
+
+
+
+# Top Level
+
+class AsmTopLevel(AsmNode):
+    pass
 
 @dataclass
-class AsmFunction(AsmNode):
+class AsmFunction(AsmTopLevel):
     name: str
+    is_global: bool
     instructions: List["AsmInstruction"]
+
+@dataclass
+class AsmStaticVariable(AsmTopLevel):
+    name: str
+    is_global: bool
+    init: int
 
 
 
@@ -247,6 +264,10 @@ class AsmMem(AsmOperand):
     addr: AsmRegister
     offset: int
 
+@dataclass
+class AsmData(AsmOperand):
+    value: str
+
 
 
 
@@ -303,7 +324,10 @@ def tacky_parse_value(t_val: TValue) -> AsmOperand:
         case TConstant(value):
             return AsmImmediate(value)
         case TVariable(identifier):
-            return AsmPseudo(identifier)
+            if identifier in symbols and isinstance(symbols[identifier].attrs, StaticAttr):
+                return AsmData(identifier)
+            else:
+                return AsmPseudo(identifier)
         case _:
             raise SyntaxError
         
@@ -558,7 +582,7 @@ def tacky_parse_function(t_func: TFunction) -> AsmFunction:
 
     a_name = t_func.identifier
     instructions.extend(tacky_parse_instructions(t_func.instructions))
-    return AsmFunction(a_name, instructions)
+    return AsmFunction(a_name, t_func.is_global, instructions)
 
 
 def get_stack_offset(identifier: str, offsets: dict) -> int:
@@ -576,7 +600,7 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
                 fixed_asm_func = tacky_fix_asm(asm_func, offsets)
                 fixed_asm_funcs.append(fixed_asm_func)
             return AsmProgram(fixed_asm_funcs)
-        case AsmFunction(name, f_insts):
+        case AsmFunction(name, is_global, f_insts):
             var_stack_offsets = dict()
             a_insts = [tacky_fix_asm(f_inst, var_stack_offsets) for f_inst in f_insts]
             var_count = len(var_stack_offsets)
@@ -593,7 +617,7 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
             for a_inst in a_movs_fixed:
                 a_divs_fixed.extend(tacky_fix_idivs(a_inst))
 
-            a_func = AsmFunction(name, a_divs_fixed)
+            a_func = AsmFunction(name, is_global, a_divs_fixed)
             return a_func
         case AsmMov(src, dst):
             return AsmMov(tacky_fix_asm(src, offsets), tacky_fix_asm(dst, offsets))
@@ -607,7 +631,7 @@ def tacky_fix_asm(node: AsmNode, offsets: dict) -> AsmNode:
             return AsmBinary(binop, tacky_fix_asm(op1, offsets), tacky_fix_asm(op2, offsets))
         case AsmIDiv(op):
             return AsmIDiv(tacky_fix_asm(op, offsets))
-        case AsmRegister(_) | AsmImmediate(_) | AsmCdq() | AsmRet() | AsmCmp(_, _) | AsmSetCC(_, _) | AsmJmp(_) | AsmJmpCC(_, _) | AsmLabel(_) | AsmAllocateStack(_) | AsmCall(_, _) | AsmDeallocateStack(_) | AsmStack(_) | AsmMem(_, _):
+        case AsmRegister(_) | AsmImmediate(_) | AsmCdq() | AsmRet() | AsmCmp(_, _) | AsmSetCC(_, _) | AsmJmp(_) | AsmJmpCC(_, _) | AsmLabel(_) | AsmAllocateStack(_) | AsmCall(_, _) | AsmDeallocateStack(_) | AsmStack(_) | AsmMem(_, _) | AsmData(_) | AsmStaticVariable(_, _, _):
             return node
         case AsmPseudo(identifier):
             return AsmStack(get_stack_offset(identifier, offsets))
@@ -632,7 +656,7 @@ def tacky_fix_idivs(node: AsmNode) -> List["AsmNode"]:
 
 def tacky_fix_movs_adds_subs_cmps(node: AsmNode) -> List["AsmNode"]:
     match node:
-        case AsmMov(AsmStack(_) as op1, AsmStack(_) as op2):
+        case AsmMov(AsmStack(_) | AsmData(_) as op1, AsmStack(_) | AsmData(_) as op2):
             return [
                 AsmMov(op1, AsmRegister(AsmR10())),
                 AsmMov(AsmRegister(AsmR10()), op2)
@@ -671,12 +695,22 @@ def tacky_fix_movs_adds_subs_cmps(node: AsmNode) -> List["AsmNode"]:
             return [node]
 
 
-def tacky_parse_program(t_prog: TProgram) -> AsmProgram:
-    t_funcs = []
+def tacky_parse_program(t_prog: TProgram, _symbols: Dict[str, SymbolsTableItem]) -> AsmProgram:
+    global symbols
+    symbols = _symbols
 
-    for f in t_prog.functions:
-        t_func = tacky_parse_function(f)
-        t_funcs.append(t_func)
-    a_prog = AsmProgram(t_funcs)
+    top_level = []
+
+    for entry in t_prog.functions:
+        match entry:
+            case TStaticVariable(name, is_global, init):
+                top_level.append(AsmStaticVariable(name, is_global, init))
+            case TFunction(_, _, _, _) as f:
+                t_func = tacky_parse_function(f)
+                top_level.append(t_func)
+            case _:
+                raise SyntaxError("Wrong entry type")
+        
+    a_prog = AsmProgram(top_level)
     a_prog_pseudo_replaced = tacky_fix_asm(a_prog, dict())
     return a_prog_pseudo_replaced
