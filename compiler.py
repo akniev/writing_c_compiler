@@ -56,31 +56,31 @@ def main(argv):
     if args.validate:
         tokens = get_tokens(text)
         ast = parse(tokens)
-        v_ast = validate(ast)
+        v_ast, _ = validate(ast)
 
         v_ast.pretty_print()
-        return 0
-    
-    if args.codegen:
-        tokens = get_tokens(text)
-        ast = parse(tokens)
-        print("===PARSER==")
-        ast.pretty_print()
-        v_ast = validate(ast)
-        tacky_ast = t_parse_program(v_ast)
-        print("===TACKY===")
-        tacky_ast.pretty_print()
-        asm_ast = tacky_parse_program(tacky_ast)
-        print("====ASM====")
-        asm_ast.pretty_print()
         return 0
     
     if args.tacky:
         tokens = get_tokens(text)
         ast = parse(tokens)
-        v_ast = validate(ast)
-        tacky_ast = t_parse_program(v_ast)
+        v_ast, symbols = validate(ast)
+        tacky_ast = t_parse_program(v_ast, symbols)
         tacky_ast.pretty_print()
+        return 0
+
+    if args.codegen:
+        tokens = get_tokens(text)
+        ast = parse(tokens)
+        print("===PARSER==")
+        ast.pretty_print()
+        v_ast, symbols = validate(ast)
+        tacky_ast = t_parse_program(v_ast, symbols)
+        print("===TACKY===")
+        tacky_ast.pretty_print()
+        asm_ast = tacky_parse_program(tacky_ast)
+        print("====ASM====")
+        asm_ast.pretty_print()
         return 0
 
     print("===PARSER==")
@@ -90,11 +90,11 @@ def main(argv):
     v_ast.pretty_print()
     
     print("===TACKY===")
-    tacky_ast = t_parse_program(v_ast)
+    tacky_ast, symbols = t_parse_program(v_ast)
     tacky_ast.pretty_print()
     
     print("====ASM====")
-    asm_ast = tacky_parse_program(tacky_ast)
+    asm_ast = tacky_parse_program(tacky_ast, symbols)
     asm_ast.pretty_print()
     asm = gen_asm(asm_ast)
     

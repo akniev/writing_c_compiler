@@ -1,6 +1,7 @@
 from dataclasses import *
 from typing import List
 from parser import *
+from validator_types import *
 
 class TackyNode:
     def pretty_print(self, prefix = "", indent = 0):
@@ -46,16 +47,26 @@ label_counter = 0
 
 @dataclass
 class TProgram(TackyNode):
-    functions: List["TFunction"]
+    functions: List["TopLevel"]
+
+
+class TopLevel(TackyNode):
+    pass
 
 
 @dataclass
-class TFunction(TackyNode):
+class TFunction(TopLevel):
     identifier: str
+    is_global: bool
     params: List[str]
     instructions: List["TInstruction"]
 
 
+@dataclass
+class TStaticVariable(TopLevel):
+    identifier: str
+    is_global: bool
+    init: int
 
 
 
@@ -210,22 +221,48 @@ class TGreaterOrEqualOperator(TBinaryOperator):
     pass
 
 
-def t_parse_program(pnode: ProgramNode) -> TProgram:
-    t_functions = []
-    for f in pnode.function_declarations:
-        if not f.body:
-            continue
-        t_func = t_parse_function(f)
-        t_functions.append(t_func)
-    return TProgram(t_functions)
+def t_convert_symbols_to_tacky(symbols: Dict[str, SymbolsTableItem]) -> List["TopLevel"]:
+    items = []
+
+    for entry in symbols.values():
+        match entry.attrs:
+            case StaticAttr(init, is_global):
+                match init:
+                    case InitialValueInt(value):
+                        items.append(TStaticVariable(entry.name, is_global, value))
+                    case InitialValueTentative():
+                        items.append(TStaticVariable(entry.name, is_global, 0))
+                    case InitialValueNoInitializer():
+                        continue
+                    case _:
+                        raise SyntaxError()
+            case _:
+                continue
+
+    return items
+
+def t_parse_program(pnode: ProgramNode, symbols: Dict[str, SymbolsTableItem]) -> TProgram:
+    top_level_items = t_convert_symbols_to_tacky(symbols)
+    for decl in pnode.declarations:
+        match decl:
+            case FunctionDeclarationNode(name, _, _, _) as f:
+                if not f.body:
+                    continue
+                is_global = symbols[name].attrs.is_global
+                t_func = t_parse_function(f, is_global)
+                top_level_items.append(t_func)
+            case _:
+                pass
+
+    return TProgram(top_level_items)
 
 
-def t_parse_function(fnode: FunctionDeclarationNode) -> TFunction:
+def t_parse_function(fnode: FunctionDeclarationNode, is_global: bool) -> TFunction:
     fname = fnode.name
     finstructions = []
     finstructions.extend(t_parse_block_items(fnode.body.items))
     finstructions.append(TReturnInstruction(TConstant(0)))
-    return TFunction(fname, fnode.params, finstructions)
+    return TFunction(fname, is_global, fnode.params, finstructions)
 
 def t_parse_block_item(b_item: "BlockItemNode") -> List["TInstruction"]:
     match b_item:

@@ -1,11 +1,21 @@
+/* Verify that if variable is tentatively defined one or more times,
+ * but not explicitly initialized, we'll initialize it to 0.
+ */
+
+/* This declares foo but does not define it */
+extern int foo;
+
+/* A tentative definition of foo */
+int foo;
+
+/* Another tentative definition of foo */
+int foo;
+
 int main(void) {
-
-    int x = 0;
-
-    /* a variable declared in a for loop header cannot have a storage class. */
-    for (static int i = 0; i < 10; i = i + 1) {
-        x = x + 1;
-    }
-
-    return x;
+    for (int i = 0; i < 5; i = i + 1)
+        foo = foo + 1;
+    return foo;
 }
+
+/* Yet another tentative definition of foo */
+int foo;

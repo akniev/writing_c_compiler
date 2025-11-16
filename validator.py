@@ -1,5 +1,6 @@
 from tacky import *
 from parser import *
+from validator_types import *
 
 
 block_counter = 0
@@ -9,41 +10,6 @@ def get_block_id():
     global block_counter
     block_counter += 1
     return block_counter
-
-@dataclass
-class IdentifierMapEntry:
-    new_name: str
-    block_id: bool
-    has_linkage: bool
-
-class IdentifierAttrs:
-    pass
-
-@dataclass
-class FunAttr(IdentifierAttrs):
-    is_defined: bool
-    is_global: bool
-
-@dataclass
-class StaticAttr(IdentifierAttrs):
-    init: "InitialValue"
-    is_global: bool
-
-class LocalAttr(IdentifierAttrs):
-    pass
-
-class InitialValue:
-    pass
-
-class InitialValueTentative(InitialValue):
-    pass
-
-@dataclass
-class InitialValueInt(InitialValue):
-    value: int
-
-class InitialValueNoInitializer(InitialValue):
-    pass
 
 
 def resolve_param(param: str, block_id: int, identifier_map: Dict[str, IdentifierMapEntry]) -> str:
@@ -492,12 +458,6 @@ def switch_add_cases_info(node: AstNode, params: dict):
         case _:
             pass
 
-@dataclass
-class SymbolsTableItem:
-    name: str
-    type: str
-    attrs: IdentifierAttrs
-
 
 def get_fun_type(params):
     return f"Fun{len(params)}"
@@ -659,5 +619,6 @@ def validate(ast: AstNode) -> "AstNode":
     traverse_ast(s4, { "defined_functions": defined_functions }, save_defined_functions, None)
     s5 = process_ast(s4, {"defined_functions": defined_functions}, set_plt_flat_for_defined_functions, None, None)
 
-    typecheck_ast(s5, dict())
-    return s4
+    symbols = dict()
+    typecheck_ast(s5, symbols)
+    return s4, symbols
