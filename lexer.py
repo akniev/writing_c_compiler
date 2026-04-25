@@ -3,7 +3,7 @@ from typing import *
 import re
 
 
-KEYWORDS = set(["int", "void", "return", "if", "else", "goto", "do", "while", "for", "break", "continue", "switch", "case", "default", "extern", "static"])
+KEYWORDS = set(["int", "void", "return", "if", "else", "goto", "do", "while", "for", "break", "continue", "switch", "case", "default", "extern", "static", "long"])
 
 class Token:
     pattern: ClassVar[Pattern[str]]
@@ -25,13 +25,22 @@ class Identifier(Token):
         return cls(name, is_keyword) 
 
 @dataclass
-class Constant(Token):
+class IntConstant(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"[0-9]+\b")
     value: int
 
     @classmethod
     def from_match(cls, m):
         return cls(int(m.group(0)))
+    
+@dataclass
+class LongConstant(Token):
+    pattern: ClassVar[Pattern[str]] = re.compile(r"([0-9]+)[lL]\b")
+    value: int
+
+    @classmethod
+    def from_match(cls, m):
+        return cls(int(m.group(1)))
 
 class OpenParenthesis(Token):
     pattern: ClassVar[Pattern[str]] = re.compile(r"\(")
@@ -351,7 +360,8 @@ class Comma(Token):
 
 TOKENS: List["Token"] = [
     Identifier, 
-    Constant, 
+    IntConstant,
+    LongConstant,
     OpenParenthesis, 
     CloseParenthesis, 
     OpenBrace, 

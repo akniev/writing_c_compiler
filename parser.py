@@ -633,8 +633,8 @@ def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
     if token is None:
         raise SyntaxError("Unexpected end of file")
 
-    if isinstance(token, Constant):
-        s_const: "Constant" = expect_and_take(Constant, tokens)
+    if isinstance(token, IntConstant):
+        s_const: "IntConstant" = expect_and_take(IntConstant, tokens)
         return ConstantExpressionNode(s_const.value)
     elif isinstance(token, Identifier) and isinstance(peek(tokens, 2), OpenParenthesis):
         return ast_parse_function_call(tokens)
