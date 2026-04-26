@@ -57,7 +57,7 @@ def ast_parse_unary_expression(tokens: List["Token"], min_prec) -> UnaryOperator
     if not is_unary(token):
         raise SyntaxError
     exp = ast_parse_exp(tokens, 60)
-    return UnaryExpressionNode(get_unary_operator(token), exp)
+    return UnaryExpressionNode(None, get_unary_operator(token), exp)
 
 def ast_parse_binop(tokens: List["Token"]) -> BinaryOperatorNode:
     token = take_token(tokens)
@@ -142,11 +142,11 @@ def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
         if isinstance(next_token, EqualSign):
             take_token(tokens)
             right = ast_parse_exp(tokens, precedence(next_token))
-            left = AssignmentExpressionNode(left, right)
+            left = AssignmentExpressionNode(None, left, right)
         elif isinstance(next_token, QuestionMark):
             middle = ast_parse_conditional_middle(tokens)
             right = ast_parse_exp(tokens, precedence(next_token))
-            left = ConditionalExpressionNode(left, middle, right)
+            left = ConditionalExpressionNode(None, left, middle, right)
         elif type(next_token) in [TwoPlusses, TwoMinuses]:
             t = take_token(tokens)
             operator = ast_parse_prefix_postfix_unop(t)
@@ -155,11 +155,11 @@ def ast_parse_exp(tokens: List["Token"], min_prec) -> "ExpressionNode":
             t = take_token(tokens)
             operator = ast_parse_compop(t)
             right = ast_parse_exp(tokens, precedence(next_token))
-            left = CompoundAssignmentExpressionNode(operator, left, right)
+            left = CompoundAssignmentExpressionNode(None, operator, left, right)
         else:
             operator = ast_parse_binop(tokens)
             right = ast_parse_exp(tokens, precedence(next_token) + 1)
-            left = BinaryExpressionNode(operator, left, right)
+            left = BinaryExpressionNode(None, operator, left, right)
         next_token = peek(tokens)
     return left
 
@@ -184,22 +184,22 @@ def ast_parse_function_call(tokens: List["Token"]) -> "FunctionCallExpressionNod
     
     expect_and_take(CloseParenthesis, tokens)
 
-    return FunctionCallExpressionNode(f_name, f_args, False)
+    return FunctionCallExpressionNode(None, f_name, f_args, False)
 
-def ast_parse_constant(tokens: List[Token]) -> ConstNode:
+def ast_parse_constant(tokens: List[Token]) -> ConstIntExpressionNode | ConstLongExpressionNode:
     token = take_token(tokens)
     if isinstance(token, IntConstant):
         if token.value > 2**63 - 1:
             raise SyntaxError("Constant is too large to represent as an int or long")
         elif token.value <= 2**31 - 1:
-            return ConstIntNode(token.value)
+            return ConstIntExpressionNode(None, token.value)
         else:
-            return ConstLongNode(token.value)
+            return ConstLongExpressionNode(None, token.value)
     elif isinstance(token, LongConstant):
         if token.value > 2**63 - 1:
             raise SyntaxError("Constant is too large to represent as an int or long")
         else:
-            return ConstLongNode(token.value)
+            return ConstLongExpressionNode(None, token.value)
     else:
         raise SyntaxError("Wrong constant token!")
 
@@ -220,7 +220,7 @@ def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
         expect_and_take(CloseParenthesis, tokens)
         exp = ast_parse_exp(tokens, min_prec)
         target_type = parse_type_specifiers(type_specifiers)
-        return CastExpressionNode(target_type, exp)
+        return CastExpressionNode(None, target_type, exp)
     elif isinstance(token, Identifier) and isinstance(peek(tokens, 2), OpenParenthesis):
         return ast_parse_function_call(tokens)
     elif isinstance(token, Identifier):
@@ -228,14 +228,14 @@ def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
         if t.is_keyword:
             raise SyntaxError
         take_token(tokens)
-        return VariableExpressionNode(t.name)
+        return VariableExpressionNode(None, t.name)
     elif is_unary(token):
         return ast_parse_unary_expression(tokens, min_prec)
     elif is_prefix_postfix(token):
         t = take_token(tokens)
         op = ast_parse_prefix_postfix_unop(t)
         exp = ast_parse_exp(tokens, 1000)
-        return PrefixExpressionNode(op, exp)
+        return PrefixExpressionNode(None, op, exp)
     elif isinstance(token, OpenParenthesis):
         expect_and_take(OpenParenthesis, tokens)
         exp = ast_parse_exp(tokens, 0)

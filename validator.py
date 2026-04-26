@@ -24,7 +24,7 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
         return None
 
     match node:
-        # Top level
+        # MARK: Top level
         case ProgramNode(fun_decls):
             new_fun_decls = []
             for fun_decl in fun_decls:
@@ -33,8 +33,8 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
             p_node = ProgramNode(new_fun_decls)
             return p_node
         
-        # Declarations
-        case FunctionDeclarationNode(name, params, body, storage_class):
+        # MARK: Declarations
+        case FunctionDeclarationNode(name, params, body, fun_type, storage_class):
             if block_id != 0 and isinstance(storage_class, StaticStorageClass):
                 raise SyntaxError("Wrong storage class")
             new_block_id = get_block_id()
@@ -59,7 +59,7 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
                     new_body_item = identifier_resolution(body_item, new_block_id, inner_map)
                     new_body_items.append(new_body_item)
                 new_body = BlockNode(new_body_items)
-            return FunctionDeclarationNode(name, new_params, new_body, storage_class)
+            return FunctionDeclarationNode(name, new_params, new_body, fun_type, storage_class)
         case VariableDeclarationNode(name, exp, storage_class):
             if block_id == 0: # File scope variable
                 identifier_map[name] = IdentifierMapEntry(name, block_id, True)
@@ -82,11 +82,11 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
                 #     raise SyntaxError("Duplicate variable declaration!")
                 # name_resolved = get_temp_var_name(name)
                 # identifier_map[name] = IdentifierMapEntry(name_resolved, block_id, False)
-                d_node = VariableDeclarationNode(new_name, identifier_resolution(exp, block_id, identifier_map), storage_class)
+                d_node = VariableDeclarationNode(new_name, identifier_resolution(exp, block_id, identifier_map), None, storage_class)
                 return d_node
         
         
-        # Blocks
+        # MARK: Blocks
         case BlockNode(items):
             new_block_id = get_block_id()
             variable_map_copy = identifier_map.copy()
@@ -98,7 +98,7 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
         case DeclarationBlockItemNode(declaration):
             return DeclarationBlockItemNode(identifier_resolution(declaration, block_id, identifier_map))
         
-        # Statements
+        # MARK: Statements
         case NullStatementNode():
             return node
         case ReturnStatementNode(exp):
@@ -158,53 +158,62 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
             n_st = identifier_resolution(st, block_id, identifier_map)
             return DefaultLabeledStatement(n_st, switch_label, label)
 
-        # Expressions
-        case ConstIntExpressionNode(_):
+        # MARK: Expressions
+        case ConstIntExpressionNode(_, _):
             return node
-        case UnaryExpressionNode(unop, exp):
-            return UnaryExpressionNode(unop, identifier_resolution(exp, block_id, identifier_map))
-        case BinaryExpressionNode(binop, exp1, exp2):
+        case ConstLongExpressionNode(_, _):
+            return node
+        case CastExpressionNode(exp_type, type_node, exp):
+            n_exp = identifier_resolution(exp, block_id, identifier_map)
+            return CastExpressionNode(exp_type, type_node, exp)
+        case UnaryExpressionNode(exp_type, unop, exp):
+            return UnaryExpressionNode(exp_type, unop, identifier_resolution(exp, block_id, identifier_map))
+        case BinaryExpressionNode(exp_type, binop, exp1, exp2):
             return BinaryExpressionNode(
+                exp_type,
                 binop,
                 identifier_resolution(exp1, block_id, identifier_map),
                 identifier_resolution(exp2, block_id, identifier_map)
             )
-        case PrefixExpressionNode(op, exp):
-            return PrefixExpressionNode(op, identifier_resolution(exp, block_id, identifier_map))
-        case PostfixExpressionNode(op, exp):
-            return PostfixExpressionNode(op, identifier_resolution(exp, block_id, identifier_map))
-        case VariableExpressionNode(name):
+        case PrefixExpressionNode(exp_type, op, exp):
+            return PrefixExpressionNode(exp_type, op, identifier_resolution(exp, block_id, identifier_map))
+        case PostfixExpressionNode(exp_type, op, exp):
+            return PostfixExpressionNode(exp_type, op, identifier_resolution(exp, block_id, identifier_map))
+        case VariableExpressionNode(exp_type, name):
             if not name in identifier_map:
                 raise SyntaxError("Undeclared variable!")
-            return VariableExpressionNode(identifier_map[name].new_name)
-        case AssignmentExpressionNode(lhs, rhs):
+            return VariableExpressionNode(exp_type, identifier_map[name].new_name)
+        case AssignmentExpressionNode(exp_type, lhs, rhs):
             if not isinstance(lhs, VariableExpressionNode):
                 raise SyntaxError("Invalid lvalue!")
             return AssignmentExpressionNode(
+                exp_type,
                 identifier_resolution(lhs, block_id, identifier_map),
                 identifier_resolution(rhs, block_id, identifier_map)
             )
-        case CompoundAssignmentExpressionNode(binop, lhs, rhs):
+        case CompoundAssignmentExpressionNode(exp_type, binop, lhs, rhs):
             if not isinstance(lhs, VariableExpressionNode):
                 raise SyntaxError("Invalid lvalue!")
             return CompoundAssignmentExpressionNode(
+                exp_type,
                 binop,
                 identifier_resolution(lhs, block_id, identifier_map),
                 identifier_resolution(rhs, block_id, identifier_map)
             )
-        case ConditionalExpressionNode(cond, true_exp, false_exp):
+        case ConditionalExpressionNode(exp_type, cond, true_exp, false_exp):
             return ConditionalExpressionNode(
+                exp_type,
                 identifier_resolution(cond, block_id, identifier_map),
                 identifier_resolution(true_exp, block_id, identifier_map),
                 identifier_resolution(false_exp, block_id, identifier_map)
             )
-        case FunctionCallExpressionNode(name, args, plt):
+        case FunctionCallExpressionNode(exp_type, name, args, plt):
             if name in identifier_map:
                 new_name = identifier_map[name].new_name
                 new_args = []
                 for arg in args:
                     new_args.append(identifier_resolution(arg, block_id, identifier_map))
-                return FunctionCallExpressionNode(new_name, new_args, plt)
+                return FunctionCallExpressionNode(exp_type, new_name, new_args, plt)
             else:
                 raise SyntaxError("Undeclared function!")
         case _:
@@ -223,8 +232,8 @@ def resolve_labels(node: AstNode, update_goto: bool, func_prefix: str, label_map
                 resolved_function_declarations.append(f_node_resolved)
             p_node = ProgramNode(resolved_function_declarations)
             return p_node
-        case FunctionDeclarationNode(name, params, block, storage_class):
-            return FunctionDeclarationNode(name, params, resolve_labels(block, update_goto, name, label_map), storage_class)
+        case FunctionDeclarationNode(name, params, block, fun_type, storage_class):
+            return FunctionDeclarationNode(name, params, resolve_labels(block, update_goto, name, label_map), fun_type, storage_class)
         case BlockNode(block_items):
             block_items_resolved = []
             for bi in block_items:
@@ -325,9 +334,9 @@ def label_break_and_continue_statements(node: AstNode, labels: List[Tuple["str",
                 new_fun_decl = label_break_and_continue_statements(fun_decl, labels)
                 new_fun_decls.append(new_fun_decl)
             return ProgramNode(new_fun_decls)
-        case FunctionDeclarationNode(name, params, body, storage_class):
+        case FunctionDeclarationNode(name, params, body, fun_type, storage_class):
             n_body = label_break_and_continue_statements(body, labels) if body else None
-            return FunctionDeclarationNode(name, params, n_body, storage_class)
+            return FunctionDeclarationNode(name, params, n_body, fun_type, storage_class)
         case VariableDeclarationNode(_, _):
             return node
         
@@ -573,7 +582,7 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                     raise SyntaxError("Variable used as function name")
                 if f_type != get_fun_type(args):
                     raise SyntaxError("Function calledc with the wrong number of arguments")
-            case VariableExpressionNode(name):
+            case VariableExpressionNode(exp_type, name):
                 if symbols[name].type != "Int":
                     raise SyntaxError("Function mame used as variable")
 

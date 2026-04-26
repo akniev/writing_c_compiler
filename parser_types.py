@@ -414,7 +414,7 @@ class AssignmentOperatorNode(BinaryOperatorNode):
 
 @dataclass
 class ExpressionNode(AstNode):
-    pass
+    exp_type: TypeNode
 
 @dataclass
 class ConstIntExpressionNode(ExpressionNode):
@@ -476,18 +476,3 @@ class FunctionCallExpressionNode(ExpressionNode):
     name: str
     args: List["ExpressionNode"]
     plt: bool
-
-
-# MARK: Constants
-
-@dataclass
-class ConstNode(AstNode):
-    pass
-
-@dataclass
-class ConstIntNode(ConstNode):
-    val: int
-
-@dataclass
-class ConstLongNode(ConstNode):
-    val: int
