@@ -341,7 +341,7 @@ def t_parse_prefix_exp(op: UnaryOperatorNode, exp: ExpressionNode, instructions:
         binop = SubtractOperatorNode()
     else:
         raise SyntaxError("Wrong operator!")
-    exp1 = CompoundAssignmentExpressionNode(binop, exp, ConstantExpressionNode(1))
+    exp1 = CompoundAssignmentExpressionNode(binop, exp, ConstIntExpressionNode(1))
     result = t_parse_expression(exp1, instructions)
     return result
 
@@ -643,7 +643,7 @@ def t_parse_binop(op: BinaryOperatorNode) -> TBinaryOperator:
 
 def t_parse_expression(exp: ExpressionNode, instructions: List["TInstruction"]) -> "TValue":
     match exp:
-        case ConstantExpressionNode(const):
+        case ConstIntExpressionNode(const):
             return TConstant(const)
         case UnaryExpressionNode(op, exp):
             src = t_parse_expression(exp, instructions)

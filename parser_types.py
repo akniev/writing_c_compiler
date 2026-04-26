@@ -148,6 +148,28 @@ class ProgramNode(AstNode):
 
 
 
+# MARK: Types
+
+@dataclass
+class TypeNode(AstNode):
+    pass
+
+
+@dataclass
+class IntTypeNode(TypeNode):
+    pass
+
+@dataclass
+class LongTypeNode(TypeNode):
+    pass
+
+@dataclass
+class FunTypeNode(TypeNode):
+    params: List["TypeNode"]
+    ret: "TypeNode"
+
+
+
 # MARK: Declaration
 
 class DeclarationStorageClass(AstNode):
@@ -167,6 +189,7 @@ class DeclarationNode(AstNode):
 class VariableDeclarationNode(DeclarationNode):
     name: str
     init: Optional["ExpressionNode"]
+    var_type: "TypeNode"
     storage_class: Optional["DeclarationStorageClass"]
 
 @dataclass
@@ -174,6 +197,7 @@ class FunctionDeclarationNode(AstNode):
     name: str
     params: List[str]
     body: Optional["BlockNode"]
+    fun_type: "TypeNode"
     storage_class: Optional["DeclarationStorageClass"]
 
 
@@ -388,11 +412,16 @@ class AssignmentOperatorNode(BinaryOperatorNode):
 
 # MARK: Expressions
 
+@dataclass
 class ExpressionNode(AstNode):
     pass
 
 @dataclass
-class ConstantExpressionNode(ExpressionNode):
+class ConstIntExpressionNode(ExpressionNode):
+    const: int
+
+@dataclass
+class ConstLongExpressionNode(ExpressionNode):
     const: int
 
 @dataclass
@@ -421,6 +450,11 @@ class VariableExpressionNode(ExpressionNode):
     name: str
 
 @dataclass
+class CastExpressionNode(ExpressionNode):
+    target_type: "TypeNode"
+    exp: "ExpressionNode"
+
+@dataclass
 class AssignmentExpressionNode(ExpressionNode):
     lhs: "ExpressionNode"
     rhs: "ExpressionNode"
@@ -442,3 +476,18 @@ class FunctionCallExpressionNode(ExpressionNode):
     name: str
     args: List["ExpressionNode"]
     plt: bool
+
+
+# MARK: Constants
+
+@dataclass
+class ConstNode(AstNode):
+    pass
+
+@dataclass
+class ConstIntNode(ConstNode):
+    val: int
+
+@dataclass
+class ConstLongNode(ConstNode):
+    val: int

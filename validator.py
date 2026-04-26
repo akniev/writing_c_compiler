@@ -159,7 +159,7 @@ def identifier_resolution(node: AstNode, block_id: int, identifier_map: Dict[str
             return DefaultLabeledStatement(n_st, switch_label, label)
 
         # Expressions
-        case ConstantExpressionNode(_):
+        case ConstIntExpressionNode(_):
             return node
         case UnaryExpressionNode(unop, exp):
             return UnaryExpressionNode(unop, identifier_resolution(exp, block_id, identifier_map))
@@ -411,14 +411,14 @@ def validate_prefix_and_postfix(node: AstNode, params: dict):
 def validate_non_constant_cases(node: AstNode, params: dict):
     match node:
         case CaseLabeledStatement(val, statement, _, _):
-            if not isinstance(val, ConstantExpressionNode):
+            if not isinstance(val, ConstIntExpressionNode):
                 raise SyntaxError
         case _:
             pass
 
 def assign_unique_labels_to_cases(node: AstNode, params: dict):
     match node:
-        case CaseLabeledStatement(ConstantExpressionNode(val), _, switch_label, _) as c_node:
+        case CaseLabeledStatement(ConstIntExpressionNode(val), _, switch_label, _) as c_node:
             c_node.label = get_label_name(f"{switch_label}.case{val}")
         case DefaultLabeledStatement(_, switch_label, _) as d_node:
             d_node.label = get_label_name(f"{switch_label}.default")
@@ -429,7 +429,7 @@ def validate_case_uniqueness(node: AstNode, params: dict):
     cases_for_switches = params["cases"]
     defaults_for_switches = params["defaults"]
     match node:
-        case CaseLabeledStatement(ConstantExpressionNode(val), statement, switch_label, _):
+        case CaseLabeledStatement(ConstIntExpressionNode(val), statement, switch_label, _):
             if not switch_label in cases_for_switches:
                 cases_for_switches[switch_label] = set()
             if val in cases_for_switches[switch_label]:
@@ -450,7 +450,7 @@ def switch_add_cases_info(node: AstNode, params: dict):
                 raise SyntaxError
             switch_node: SwitchStatementNode = switches_dict[switch_label]
             switch_node.defaultCase = label
-        case CaseLabeledStatement(ConstantExpressionNode(val), _, switch_label, label):
+        case CaseLabeledStatement(ConstIntExpressionNode(val), _, switch_label, label):
             if not isinstance(switches_dict[switch_label], SwitchStatementNode):
                 raise SyntaxError
             switch_node: SwitchStatementNode = switches_dict[switch_label]
@@ -479,7 +479,7 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                 initial_value = None
                 if block_id == 0: # File scope
                     match init:
-                        case ConstantExpressionNode(value):
+                        case ConstIntExpressionNode(value):
                             initial_value = InitialValueInt(value)
                         case None:
                             if isinstance(storage_class, ExternStorageClass):
@@ -526,7 +526,7 @@ def typecheck_ast(node: AstNode, symbols: Dict[str, SymbolsTableItem]):
                     elif isinstance(storage_class, StaticStorageClass):
                         initial_value = None
                         match init:
-                            case ConstantExpressionNode(value):
+                            case ConstIntExpressionNode(value):
                                 initial_value = InitialValueInt(value)
                             case None:
                                 initial_value = InitialValueInt(0)
