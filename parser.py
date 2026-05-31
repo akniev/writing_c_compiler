@@ -192,14 +192,14 @@ def ast_parse_constant(tokens: List[Token]) -> ConstIntExpressionNode | ConstLon
         if token.value > 2**63 - 1:
             raise SyntaxError("Constant is too large to represent as an int or long")
         elif token.value <= 2**31 - 1:
-            return ConstIntExpressionNode(None, token.value)
+            return ConstIntExpressionNode(IntTypeNode(), token.value)
         else:
-            return ConstLongExpressionNode(None, token.value)
+            return ConstLongExpressionNode(LongTypeNode(), token.value)
     elif isinstance(token, LongConstant):
         if token.value > 2**63 - 1:
             raise SyntaxError("Constant is too large to represent as an int or long")
         else:
-            return ConstLongExpressionNode(None, token.value)
+            return ConstLongExpressionNode(LongTypeNode(), token.value)
     else:
         raise SyntaxError("Wrong constant token!")
 
@@ -218,7 +218,8 @@ def ast_parse_factor(tokens: List["Token"], min_prec) -> "ExpressionNode":
             type_specifier = ast_parse_specifier(tokens)
             type_specifiers.append(type_specifier)
         expect_and_take(CloseParenthesis, tokens)
-        exp = ast_parse_exp(tokens, min_prec)
+        cast_precedence = 55
+        exp = ast_parse_exp(tokens, cast_precedence + 1)
         target_type = parse_type_specifiers(type_specifiers)
         return CastExpressionNode(None, target_type, exp)
     elif isinstance(token, Identifier) and isinstance(peek(tokens, 2), OpenParenthesis):
@@ -544,16 +545,16 @@ def ast_parse_function_declaration(specifiers: List["Identifier"], identifier: I
         param_list = []
         param_types = []
     else:
-        type_token = ast_parse_type_specifiers(tokens)
+        type_node = ast_parse_type_specifiers(tokens)
         p: Identifier = expect_and_take(Identifier, tokens)
         param_list = [p.name]
-        param_types = [type_token]
+        param_types = [type_node]
         while not isinstance(peek(tokens), CloseParenthesis):
             expect_and_take(Comma, tokens)
-            type_token = ast_parse_type_specifiers(tokens)
+            type_node = ast_parse_type_specifiers(tokens)
             p: Identifier = expect_and_take(Identifier, tokens)
             param_list.append(p.name)
-            param_types.append(type_token)
+            param_types.append(type_node)
  
     expect_and_take(CloseParenthesis, tokens)
 

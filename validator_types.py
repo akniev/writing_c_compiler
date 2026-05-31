@@ -1,10 +1,15 @@
 from dataclasses import dataclass
 
+from typing import Optional
+
+from parser_types import TypeNode
+
 
 @dataclass
 class IdentifierMapEntry:
     new_name: str
-    block_id: bool
+    block_id: int
+    type: Optional[TypeNode]
     has_linkage: bool
 
 class IdentifierAttrs:
@@ -33,11 +38,21 @@ class InitialValueTentative(InitialValue):
 class InitialValueInt(InitialValue):
     value: int
 
+@dataclass
+class InitialValueLong(InitialValue):
+    value: int
+
 class InitialValueNoInitializer(InitialValue):
     pass
 
 @dataclass
-class SymbolsTableItem:
+class SymbolsTableItem_LEGACY:
     name: str
     type: str
+    attrs: IdentifierAttrs
+
+@dataclass
+class SymbolsTableItem:
+    name: str
+    type: TypeNode
     attrs: IdentifierAttrs

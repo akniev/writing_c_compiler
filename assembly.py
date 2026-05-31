@@ -3,7 +3,7 @@ from lexer import *
 from dataclasses import *
 from tacky import *
 
-symbols: Dict[str, SymbolsTableItem] = None
+symbols: Dict[str, SymbolsTableItem_LEGACY] = None
 
 class AsmNode:
     def pretty_print(self, prefix = "", indent = 0):
@@ -695,7 +695,7 @@ def tacky_fix_movs_adds_subs_cmps(node: AsmNode) -> List["AsmNode"]:
             return [node]
 
 
-def tacky_parse_program(t_prog: TProgram, _symbols: Dict[str, SymbolsTableItem]) -> AsmProgram:
+def tacky_parse_program(t_prog: TProgram, _symbols: Dict[str, SymbolsTableItem_LEGACY]) -> AsmProgram:
     global symbols
     symbols = _symbols
 

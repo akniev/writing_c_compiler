@@ -62,9 +62,10 @@ COMPOUND_ASSIGNMENT_TOKENS = [
 
 # MARK: Precedence
 
-BINARY_OP_PRECENDENCE_MAP = {
+OP_PRECENDENCE_MAP = {
     TwoPlusses: 60,             # ++
     TwoMinuses: 60,             # --
+    # Cast op has precedence 55, but we will handle it separately in the parser
     Asterisk: 50,               # *
     ForwardSlash: 50,           # /
     PercentSign: 50,            # %
@@ -99,7 +100,7 @@ BINARY_OP_PRECENDENCE_MAP = {
 
 def precedence(token: "Token") -> int:
     if type(token) in BINARY_OP_TOKENS + INC_DEC_TOKENS:
-        return BINARY_OP_PRECENDENCE_MAP[type(token)]
+        return OP_PRECENDENCE_MAP[type(token)]
     raise SyntaxError
 
 class AstNode:

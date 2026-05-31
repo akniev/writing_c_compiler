@@ -221,7 +221,7 @@ class TGreaterOrEqualOperator(TBinaryOperator):
     pass
 
 
-def t_convert_symbols_to_tacky(symbols: Dict[str, SymbolsTableItem]) -> List["TopLevel"]:
+def t_convert_symbols_to_tacky(symbols: Dict[str, SymbolsTableItem_LEGACY]) -> List["TopLevel"]:
     items = []
 
     for entry in symbols.values():
@@ -241,7 +241,7 @@ def t_convert_symbols_to_tacky(symbols: Dict[str, SymbolsTableItem]) -> List["To
 
     return items
 
-def t_parse_program(pnode: ProgramNode, symbols: Dict[str, SymbolsTableItem]) -> TProgram:
+def t_parse_program(pnode: ProgramNode, symbols: Dict[str, SymbolsTableItem_LEGACY]) -> TProgram:
     top_level_items = t_convert_symbols_to_tacky(symbols)
     for decl in pnode.declarations:
         match decl:
